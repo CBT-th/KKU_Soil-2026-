@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Soil Improvement Trial — Combined Dashboard</title>
 <style>
   :root{
@@ -112,6 +113,77 @@
 
   .deadline-line{position:absolute;top:-10px;bottom:-10px;width:2.5px;background:#dc2626;}
   .deadline-label{position:absolute;top:-28px;font-size:9px;font-weight:700;color:#dc2626;white-space:nowrap;transform:translateX(-50%);}
+
+  /* ═════════ EDIT MODE (added) ═════════ */
+  .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;padding-left:16px;}
+  .sync-status{font-size:11.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;white-space:nowrap;}
+  .sync-status i{width:8px;height:8px;border-radius:50%;background:#6b7280;display:inline-block;}
+  .sync-status.ok i{background:#10b981;}
+  .sync-status.local i,.sync-status.dirty i{background:#f59e0b;}
+  .sync-status.err i{background:#ef4444;}
+  .sync-status.sync i{background:#60a5fa;}
+  .edit-toggle{background:#2a2e36;color:#fff;border:1px solid #3a3f49;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;}
+  .edit-toggle:hover{background:#343944;}
+  .edit-toggle.on{background:#d97706;border-color:#d97706;}
+  .edit-toggle:focus-visible,.em-dock button:focus-visible,.em-pop button:focus-visible{outline:2px solid #60a5fa;outline-offset:2px;}
+
+  body.editing{padding-bottom:96px;}
+  body.editing [contenteditable="true"]{cursor:text;outline:1px dashed transparent;outline-offset:2px;}
+  body.editing [contenteditable="true"]:hover{outline-color:#60a5fa;}
+  body.editing [contenteditable="true"]:focus{outline:2px solid #2563eb;}
+  body.editing .tab-btn{cursor:pointer;}
+  body.editing .marker,body.editing .deadline-line{cursor:pointer;}
+  body.editing .marker::before,body.editing .deadline-line::before{content:"";position:absolute;left:-5px;right:-5px;top:0;bottom:0;}
+  .em-block-selected{box-shadow:0 0 0 2px #f59e0b !important;border-radius:6px;}
+  .em-tl-selected{box-shadow:0 0 0 2px #1a1d23,0 0 0 4px #fbbf24 !important;}
+
+  .em-dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#1a1d23;color:#fff;border-radius:12px;padding:8px 10px;display:none;gap:6px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:200;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);}
+  body.editing .em-dock{display:flex;}
+  .em-dock button{background:#2a2e36;color:#e5e7eb;border:1px solid #3a3f49;border-radius:7px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;}
+  .em-dock button:hover:not(:disabled){background:#343944;color:#fff;}
+  .em-dock button:disabled{opacity:.35;cursor:not-allowed;}
+  .em-dock button.primary{background:#2563eb;border-color:#2563eb;color:#fff;}
+  .em-dock button.primary:hover{background:#1d4ed8;}
+  .em-dock button.danger:hover:not(:disabled){background:#7f1d1d;border-color:#991b1b;}
+  .em-dock .sep{width:1px;height:22px;background:#3a3f49;margin:0 2px;}
+  .em-dock .ctx{font-size:11.5px;color:#9ca3af;padding:0 6px;max-width:260px;line-height:1.3;}
+
+  .em-gear{position:absolute;z-index:150;display:none;width:24px;height:24px;border-radius:50%;background:#1a1d23;color:#fff;font-size:13px;border:2px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3);padding:0;line-height:20px;text-align:center;}
+  .em-gear:hover{background:#2563eb;}
+
+  .em-pop{position:absolute;z-index:210;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.18);padding:14px 14px 12px;width:292px;display:none;font-size:12.5px;color:var(--text);}
+  .em-pop h4{margin:0 0 10px;font-size:13px;}
+  .em-pop .f{display:grid;grid-template-columns:92px 1fr;align-items:center;gap:8px;margin-bottom:8px;}
+  .em-pop .f label{color:var(--muted);font-size:11.5px;font-weight:600;}
+  .em-pop select,.em-pop input[type=number]{width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;}
+  .em-pop input[type=color]{width:44px;height:28px;border:1px solid var(--border);border-radius:6px;padding:1px;background:#fff;cursor:pointer;}
+  .em-pop .pair{display:flex;gap:6px;}
+  .em-pop .chk{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--muted);margin:2px 0 8px;}
+  .em-pop .acts{display:flex;gap:6px;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;}
+  .em-pop .acts button{flex:1;padding:6px 8px;border-radius:7px;border:1px solid var(--border);background:#f9fafb;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .em-pop .acts button:hover{background:#f3f4f6;}
+  .em-pop .acts button.del{color:#b91c1c;}
+  .em-pop .acts button.del:hover{background:#fef2f2;}
+  .em-pop .hint{font-size:10.5px;color:var(--muted);margin-top:-2px;margin-bottom:8px;}
+
+  .em-modal{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:center;justify-content:center;z-index:300;}
+  .em-modal.show{display:flex;}
+  .em-modal-box{background:#fff;border-radius:14px;padding:22px;width:320px;max-width:calc(100vw - 32px);box-shadow:0 20px 50px rgba(0,0,0,.25);}
+  .em-modal-box h3{margin:0 0 6px;font-size:15px;}
+  .em-modal-box p{margin:0 0 14px;font-size:12.5px;color:var(--muted);}
+  .em-modal-box input{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
+  .em-modal-box input:focus{outline:2px solid #2563eb;outline-offset:1px;}
+  .em-modal-box .err{color:#b91c1c;font-size:12px;min-height:18px;margin-top:6px;}
+  .em-modal-box .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:6px;}
+  .em-modal-box .acts button{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:#f9fafb;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;}
+  .em-modal-box .acts button.primary{background:#2563eb;border-color:#2563eb;color:#fff;}
+
+  .em-toast{position:fixed;top:72px;right:20px;z-index:320;background:#1a1d23;color:#fff;padding:10px 14px;border-radius:10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none;max-width:340px;}
+  .em-toast.show{opacity:1;transform:none;}
+  .em-toast.warn{background:#92400e;}
+  .em-toast.err{background:#991b1b;}
+  .em-toast.ok{background:#065f46;}
+  @media (prefers-reduced-motion:reduce){.em-toast{transition:none;}}
 </style>
 </head>
 <body>
@@ -125,6 +197,11 @@
   <button class="tab-btn" onclick="switchTab('p2')">
     🌱 2nd Project — CBT Factory Residues
   </button>
+  <!-- added: edit mode controls -->
+  <div class="topbar-right">
+    <div class="sync-status" id="emStatus"><i></i><span>กำลังโหลด…</span></div>
+    <button class="edit-toggle" id="emToggle" type="button">✏️ โหมดแก้ไข</button>
+  </div>
 </div>
 
 <!-- ════════════════════════════════════════════════════
@@ -559,6 +636,42 @@
 </div>
 </div><!-- /page-p2 -->
 
+<!-- ════════════════ EDIT MODE UI (added) ════════════════ -->
+<div class="em-dock" id="emDock">
+  <div class="ctx" id="emCtx">คลิกข้อความเพื่อแก้ไข · ชี้ที่ Timeline แล้วกด ⚙</div>
+  <div class="sep"></div>
+  <button type="button" id="emDup" disabled title="ทำซ้ำรายการที่เลือก (แถวตาราง / แถว Timeline / การ์ด / note)">⧉ ทำซ้ำ</button>
+  <button type="button" id="emDel" class="danger" disabled title="ลบรายการที่เลือก">✕ ลบ</button>
+  <button type="button" id="emAddBar" disabled title="เพิ่มแถบใหม่ในแถว Timeline ที่เลือก">＋ แถบ</button>
+  <div class="sep"></div>
+  <button type="button" id="emRevert" title="ย้อนทุกการแก้ไขตั้งแต่เข้าโหมดแก้ไข">↶ ย้อนกลับ</button>
+  <button type="button" id="emReset" title="คืนเนื้อหาตามต้นฉบับในไฟล์ HTML">⟲ ค่าเริ่มต้น</button>
+  <button type="button" id="emExport" title="ดาวน์โหลดข้อมูลเป็น JSON สำรอง">⬇ Export</button>
+  <button type="button" id="emImport" title="นำเข้าข้อมูลจากไฟล์ JSON">⬆ Import</button>
+  <input type="file" id="emImportFile" accept="application/json,.json" hidden>
+  <div class="sep"></div>
+  <button type="button" id="emSave" class="primary" title="บันทึก (Ctrl+S)">💾 บันทึก</button>
+  <button type="button" id="emExit">ออก</button>
+</div>
+
+<button type="button" class="em-gear" id="emGear" title="ปรับตำแหน่ง / สี">⚙</button>
+<div class="em-pop" id="emPop"></div>
+
+<div class="em-modal" id="emModal" role="dialog" aria-modal="true" aria-labelledby="emModalTitle">
+  <div class="em-modal-box">
+    <h3 id="emModalTitle">🔒 เข้าสู่โหมดแก้ไข</h3>
+    <p>ใส่รหัสผ่านเพื่อแก้ไขข้อมูลใน dashboard</p>
+    <input type="password" id="emPw" placeholder="รหัสผ่าน" autocomplete="current-password">
+    <div class="err" id="emPwErr"></div>
+    <div class="acts">
+      <button type="button" id="emPwCancel">ยกเลิก</button>
+      <button type="button" id="emPwOk" class="primary">เข้าสู่โหมดแก้ไข</button>
+    </div>
+  </div>
+</div>
+
+<div class="em-toast" id="emToast"></div>
+
 <script>
 function switchTab(id){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -566,6 +679,569 @@ function switchTab(id){
   document.getElementById('page-'+id).classList.add('active');
   event.currentTarget.classList.add('active');
 }
+</script>
+
+<!-- ════════════════ EDIT MODE + FIREBASE SYNC (added) ════════════════ -->
+<script type="module">
+/* ================================================================
+   ⚙️ CONFIG — แก้ค่าในส่วนนี้ก่อน deploy
+   ================================================================ */
+const FIREBASE_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL:       "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+const DB_PATH       = "soilTrialDashboard";   // path แยกของ dashboard นี้
+const EDIT_PASSWORD = "CHANGE_ME";            // รหัสผ่านโหมดแก้ไข
+const FB_VERSION    = "10.12.2";
+const LS_KEY        = "soilTrialDashboard.v1"; // ใช้เมื่อยังไม่ได้ตั้งค่า Firebase
+/* ================================================================ */
+
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const PAGES  = ['p1','p2'];
+const wrapOf = id => $('#page-'+id+' .wrap');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const EDITABLE = [
+  '.project-tag','h1','.subtitle','.subtitle-bold','.subtitle-small',
+  '.card .label','.card .value','.card .range','.card > div[style]',
+  '.panel > h2','.row-label','.bar','.pay-tag','.marker-label','.deadline-label',
+  '.legend > span','.note','.note-red','.note-blue','.panel > div[style]',
+  'th','td','.residue-card .num','.residue-card .name'
+].map(s => '.page .wrap ' + s).join(',') + ', .topbar .logo';
+
+const MULTILINE = 'td, .note, .note-red, .note-blue, .row-label, .card > div[style], .panel > div[style], .subtitle, .subtitle-bold, .subtitle-small';
+const BLOCK_SEL = 'tbody > tr, .row, .card, .residue-card, .note, .note-red, .note-blue, .legend > span';
+const TL_SEL    = '.bar, .pay-tag, .marker, .marker-label, .deadline-line, .deadline-label';
+const POINT_SEL = '.pay-tag, .marker, .marker-label, .deadline-line, .deadline-label';
+const LINE_SEL  = '.marker, .deadline-line';
+
+const state = {
+  editing:false, dirty:false, rev:0, fb:null,
+  editStartSnap:null, remotePending:null, force:false,
+  block:null, popTarget:null, unlocked:false
+};
+try { state.unlocked = sessionStorage.getItem('soilTrialEditUnlocked') === '1'; } catch(e) {}
+
+/* ---------- status + toast ---------- */
+const statusEl = $('#emStatus');
+let baseStatus = { kind:'', text:'' };
+function setStatus(kind, text, keepBase){
+  statusEl.className = 'sync-status ' + kind;
+  statusEl.querySelector('span').textContent = text;
+  if(!keepBase) baseStatus = { kind, text };
+}
+function refreshStatus(){
+  if(state.editing && state.dirty) setStatus('dirty','มีการแก้ไขที่ยังไม่บันทึก', true);
+  else setStatus(baseStatus.kind, baseStatus.text, true);
+}
+let toastT;
+function toast(msg, kind=''){
+  const t = $('#emToast');
+  t.textContent = msg; t.className = 'em-toast show ' + kind;
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = 'em-toast', 3200);
+}
+const fmtTime = ts => ts ? new Date(ts).toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' }) : '';
+function markDirty(){ if(!state.editing) return; state.dirty = true; refreshStatus(); }
+
+/* ---------- snapshot / apply ---------- */
+function cleanHTML(node){
+  const c = node.cloneNode(true);
+  c.querySelectorAll('[contenteditable]').forEach(e => e.removeAttribute('contenteditable'));
+  c.querySelectorAll('[spellcheck]').forEach(e => e.removeAttribute('spellcheck'));
+  c.querySelectorAll('.em-block-selected,.em-tl-selected').forEach(e => e.classList.remove('em-block-selected','em-tl-selected'));
+  c.querySelectorAll('[class=""]').forEach(e => e.removeAttribute('class'));
+  return c.innerHTML;
+}
+function snapshot(){
+  const pages = {};
+  PAGES.forEach(id => pages[id] = cleanHTML(wrapOf(id)));
+  return { pages, nav: { logo: cleanHTML($('.topbar .logo')), tabs: $$('.tab-btn').map(b => b.innerHTML) } };
+}
+function sanitize(html){
+  const t = document.createElement('template');
+  t.innerHTML = String(html ?? '');
+  t.content.querySelectorAll('script,iframe,object,embed,link,meta,style,base,form').forEach(e => e.remove());
+  t.content.querySelectorAll('*').forEach(el => {
+    [...el.attributes].forEach(a => {
+      const n = a.name.toLowerCase(), v = a.value.trim().toLowerCase();
+      if(n.startsWith('on') || (/^(href|src|xlink:href|action)$/.test(n) && v.startsWith('javascript:'))) el.removeAttribute(a.name);
+    });
+  });
+  return t.innerHTML;
+}
+function applyData(d){
+  if(!d || !d.pages) return;
+  closePop(); selectBlock(null);
+  PAGES.forEach(id => { if(typeof d.pages[id] === 'string') wrapOf(id).innerHTML = sanitize(d.pages[id]); });
+  if(d.nav){
+    if(typeof d.nav.logo === 'string') $('.topbar .logo').innerHTML = sanitize(d.nav.logo);
+    if(Array.isArray(d.nav.tabs)) $$('.tab-btn').forEach((b,i) => { if(typeof d.nav.tabs[i] === 'string') b.innerHTML = sanitize(d.nav.tabs[i]); });
+  }
+  markEditable(state.editing);
+}
+const DEFAULT_SNAP = snapshot();
+
+/* ---------- backend ---------- */
+const isConfigured = !Object.values(FIREBASE_CONFIG).some(v => String(v).includes('YOUR_'));
+function loadLocal(){
+  try{
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if(d){ applyData(d); state.rev = d.rev || 0; }
+  }catch(e){ console.warn('localStorage unavailable', e); }
+}
+async function initBackend(){
+  if(!isConfigured){
+    loadLocal();
+    setStatus('local','บันทึกในเครื่องนี้ (ยังไม่ตั้งค่า Firebase)');
+    return;
+  }
+  setStatus('sync','กำลังเชื่อมต่อ Firebase…');
+  try{
+    const appMod = await import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`);
+    const dbMod  = await import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-database.js`);
+    const app = appMod.initializeApp(FIREBASE_CONFIG, 'soilTrialDashboard');
+    const db  = dbMod.getDatabase(app);
+    const r   = dbMod.ref(db, DB_PATH);
+    state.fb  = { runTransaction: dbMod.runTransaction, r };
+    dbMod.onValue(r, snap => {
+      const d = snap.val();
+      if(!d){ state.rev = 0; setStatus('ok','Firebase · ใช้ข้อมูลต้นฉบับ'); refreshStatus(); return; }
+      if(state.editing){
+        if((d.rev || 0) !== state.rev){
+          state.remotePending = d;
+          toast('มีผู้ใช้อื่นบันทึกข้อมูลใหม่ระหว่างที่คุณแก้ไข — ระบบจะถามก่อนบันทึกทับ', 'warn');
+        }
+        return;
+      }
+      state.rev = d.rev || 0;
+      applyData(d);
+      setStatus('ok','ซิงก์แล้ว · ' + fmtTime(d.updatedAt));
+    }, err => {
+      console.error(err);
+      setStatus('err','อ่าน Firebase ไม่ได้ — ตรวจสอบ Rules');
+    });
+  }catch(e){
+    console.error(e);
+    state.fb = null;
+    loadLocal();
+    setStatus('err','โหลด Firebase ไม่สำเร็จ — ใช้ข้อมูลในเครื่อง');
+  }
+}
+
+async function save(){
+  closePop();
+  const snap = snapshot();
+  const now = Date.now();
+  if(state.fb){
+    let conflict = false;
+    try{
+      const res = await state.fb.runTransaction(state.fb.r, cur => {
+        conflict = false;
+        const curRev = cur ? (cur.rev || 0) : 0;
+        if(curRev !== state.rev && !state.force){ conflict = true; return; }
+        return { ...snap, rev: curRev + 1, updatedAt: now };
+      }, { applyLocally:false });
+      if(!res.committed){
+        if(conflict){
+          const ok = confirm('ข้อมูลบน Firebase ถูกบันทึกโดยผู้ใช้อื่นหลังจากคุณเริ่มแก้ไข\n\nOK = บันทึกทับด้วยเวอร์ชันของคุณ\nCancel = ยังไม่บันทึก (งานของคุณยังอยู่บนหน้าจอ)');
+          if(ok){ state.force = true; return save(); }
+        }
+        state.force = false;
+        return false;
+      }
+      state.rev = res.snapshot.val().rev;
+    }catch(e){
+      console.error(e); state.force = false;
+      toast('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' — ตรวจสอบ Firebase Rules', 'err');
+      return false;
+    }
+  }else{
+    try{
+      state.rev += 1;
+      localStorage.setItem(LS_KEY, JSON.stringify({ ...snap, rev: state.rev, updatedAt: now }));
+    }catch(e){
+      toast('บันทึกในเครื่องไม่สำเร็จ — ใช้ Export เพื่อสำรองข้อมูล', 'err');
+      return false;
+    }
+  }
+  state.force = false; state.dirty = false; state.remotePending = null;
+  state.editStartSnap = snapshot();
+  setStatus(state.fb ? 'ok' : 'local', (state.fb ? 'ซิงก์แล้ว · ' : 'บันทึกในเครื่อง · ') + fmtTime(now));
+  toast('บันทึกแล้ว', 'ok');
+  return true;
+}
+
+/* ---------- edit mode on/off ---------- */
+function markEditable(on){
+  $$(EDITABLE).forEach(el => {
+    if(on){ el.setAttribute('contenteditable','true'); el.spellcheck = false; }
+    else { el.removeAttribute('contenteditable'); el.removeAttribute('spellcheck'); }
+  });
+  $$('.tab-btn').forEach(b => b.title = on ? 'ดับเบิลคลิกเพื่อเปลี่ยนชื่อแท็บ' : '');
+}
+function enterEdit(){
+  state.editing = true; state.dirty = false;
+  state.editStartSnap = snapshot();
+  document.body.classList.add('editing');
+  markEditable(true);
+  const b = $('#emToggle'); b.classList.add('on'); b.textContent = '✏️ กำลังแก้ไข';
+  refreshStatus();
+}
+function leaveEdit(){
+  state.editing = false; state.dirty = false;
+  closePop(); hideGear(); selectBlock(null);
+  document.body.classList.remove('editing');
+  markEditable(false);
+  const b = $('#emToggle'); b.classList.remove('on'); b.textContent = '✏️ โหมดแก้ไข';
+  if(state.remotePending){
+    state.rev = state.remotePending.rev || 0;
+    applyData(state.remotePending);
+    setStatus('ok','ซิงก์แล้ว · ' + fmtTime(state.remotePending.updatedAt));
+    state.remotePending = null;
+  }
+  refreshStatus();
+}
+async function exitEdit(){
+  if(state.dirty){
+    const ok = confirm('มีการแก้ไขที่ยังไม่บันทึก\n\nOK = บันทึกแล้วออก\nCancel = กลับไปแก้ไขต่อ');
+    if(!ok) return;
+    if(!(await save())) return;
+  }
+  leaveEdit();
+}
+function revertAll(){
+  if(!state.dirty){ toast('ยังไม่มีการแก้ไข'); return; }
+  if(!confirm('ย้อนการแก้ไขทั้งหมดตั้งแต่เข้าโหมดแก้ไขครั้งนี้?')) return;
+  applyData(state.editStartSnap); state.dirty = false; refreshStatus();
+  toast('ย้อนกลับแล้ว');
+}
+function resetDefault(){
+  if(!confirm('คืนเนื้อหาทั้งหมดตามต้นฉบับในไฟล์ HTML?\n(มีผลกับทุกคนหลังกดบันทึก)')) return;
+  applyData(DEFAULT_SNAP); markDirty();
+  toast('คืนค่าเริ่มต้นแล้ว — กดบันทึกเพื่อยืนยัน', 'warn');
+}
+
+/* ---------- password modal ---------- */
+const modal = $('#emModal'), pw = $('#emPw'), pwErr = $('#emPwErr');
+function openModal(){ pw.value = ''; pwErr.textContent = ''; modal.classList.add('show'); setTimeout(() => pw.focus(), 30); }
+function closeModal(){ modal.classList.remove('show'); }
+function tryUnlock(){
+  if(pw.value === EDIT_PASSWORD){
+    state.unlocked = true;
+    try { sessionStorage.setItem('soilTrialEditUnlocked','1'); } catch(e) {}
+    closeModal(); enterEdit();
+  }else{ pwErr.textContent = 'รหัสผ่านไม่ถูกต้อง'; pw.select(); }
+}
+$('#emPwOk').onclick = tryUnlock;
+$('#emPwCancel').onclick = closeModal;
+pw.addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); if(e.key === 'Escape') closeModal(); });
+modal.addEventListener('mousedown', e => { if(e.target === modal) closeModal(); });
+
+$('#emToggle').onclick = () => {
+  if(state.editing) return exitEdit();
+  state.unlocked ? enterEdit() : openModal();
+};
+
+/* ---------- text editing behaviour ---------- */
+document.addEventListener('input', e => {
+  if(state.editing && e.target.closest && e.target.closest('[contenteditable="true"]')) markDirty();
+});
+document.addEventListener('paste', e => {
+  if(!state.editing) return;
+  const t = e.target.closest && e.target.closest('[contenteditable="true"]');
+  if(!t) return;
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+  document.execCommand('insertText', false, text);
+});
+document.addEventListener('keydown', e => {
+  if(!state.editing) return;
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); save(); return; }
+  if(e.key === 'Escape'){ closePop(); return; }
+  const t = e.target.closest && e.target.closest('[contenteditable="true"]');
+  if(t && e.key === 'Enter' && !e.shiftKey && !t.matches(MULTILINE)){ e.preventDefault(); t.blur(); }
+});
+
+/* tab rename */
+$$('.tab-btn').forEach(b => b.addEventListener('dblclick', () => {
+  if(!state.editing) return;
+  const v = prompt('ชื่อแท็บ', b.textContent.trim());
+  if(v !== null && v.trim()){ b.textContent = v.trim(); markDirty(); }
+}));
+
+/* ---------- block selection (dock actions) ---------- */
+const BLOCK_NAMES = [['tr','แถวตาราง'],['.row','แถว Timeline'],['.card','การ์ด'],['.residue-card','การ์ด Residue'],['.note, .note-red, .note-blue','Note'],['.legend > span','Legend']];
+function selectBlock(b){
+  if(state.block) state.block.classList.remove('em-block-selected');
+  state.block = b;
+  const ctx = $('#emCtx');
+  if(b){
+    b.classList.add('em-block-selected');
+    const name = (BLOCK_NAMES.find(([s]) => b.matches(s)) || [,'รายการ'])[1];
+    ctx.textContent = 'เลือก: ' + name;
+  }else ctx.textContent = 'คลิกข้อความเพื่อแก้ไข · ชี้ที่ Timeline แล้วกด ⚙';
+  $('#emDup').disabled = !b;
+  $('#emDel').disabled = !b;
+  $('#emAddBar').disabled = !(b && b.matches('.row'));
+}
+document.addEventListener('focusin', e => {
+  if(!state.editing) return;
+  const w = e.target.closest && e.target.closest('.page .wrap');
+  if(!w) return;
+  selectBlock(e.target.closest(BLOCK_SEL));
+});
+$('#emDock').addEventListener('mousedown', e => { if(e.target.closest('button')) e.preventDefault(); });
+
+function rowsOf(tr){ return [...tr.parentElement.rows]; }
+function duplicateRow(tr){
+  const rows = rowsOf(tr), i = rows.indexOf(tr);
+  rows.slice(0, i).forEach((r, ri) => [...r.cells].forEach(c => { if(ri + c.rowSpan > i) c.rowSpan++; }));
+  const clone = tr.cloneNode(true);
+  [...clone.cells].forEach(c => { if(c.rowSpan > 1) c.remove(); });   // spanning cell stays in original row
+  [...tr.cells].forEach(c => { if(c.rowSpan > 1) c.rowSpan++; });
+  tr.after(clone);
+  return clone;
+}
+function deleteRow(tr){
+  const rows = rowsOf(tr), i = rows.indexOf(tr), next = rows[i+1];
+  rows.slice(0, i).forEach((r, ri) => [...r.cells].forEach(c => { if(ri + c.rowSpan > i) c.rowSpan--; }));
+  [...tr.cells].forEach((c, ci) => {
+    if(c.rowSpan > 1 && next){ c.rowSpan--; next.insertBefore(c, next.cells[ci] || null); }
+  });
+  tr.remove();
+}
+$('#emDup').onclick = () => {
+  const b = state.block; if(!b) return;
+  const clone = b.matches('tr') ? duplicateRow(b) : (() => { const c = b.cloneNode(true); b.after(c); return c; })();
+  clone.classList.remove('em-block-selected');
+  markEditable(true); markDirty(); selectBlock(clone);
+  toast('ทำซ้ำแล้ว');
+};
+$('#emDel').onclick = () => {
+  const b = state.block; if(!b) return;
+  if(!confirm('ลบรายการที่เลือก?')) return;
+  selectBlock(null); closePop();
+  b.matches('tr') ? deleteRow(b) : b.remove();
+  markDirty();
+};
+$('#emAddBar').onclick = () => {
+  const row = state.block; if(!row || !row.matches('.row')) return;
+  const track = $('.bar-track', row); if(!track) return;
+  const N = monthsOf(row.closest('.timeline')).length;
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.style.cssText = `left:0%;width:${(100/N).toFixed(2)}%;background:#6b7280;`;
+  bar.textContent = 'แถบใหม่';
+  track.appendChild(bar);
+  markEditable(true); markDirty(); openPop(bar);
+};
+
+/* ---------- export / import ---------- */
+$('#emExport').onclick = () => {
+  const data = { ...snapshot(), rev: state.rev, exportedAt: Date.now() };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type:'application/json' }));
+  a.download = 'soil-trial-dashboard-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#emImport').onclick = () => $('#emImportFile').click();
+$('#emImportFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!d.pages) throw new Error('ไม่พบข้อมูล pages ในไฟล์');
+    applyData(d); markDirty();
+    toast('นำเข้าแล้ว — กดบันทึกเพื่อยืนยัน', 'warn');
+  }catch(err){ toast('นำเข้าไม่สำเร็จ: ' + err.message, 'err'); }
+};
+$('#emRevert').onclick = revertAll;
+$('#emReset').onclick  = resetDefault;
+$('#emSave').onclick   = () => save();
+$('#emExit').onclick   = exitEdit;
+
+window.addEventListener('beforeunload', e => {
+  if(state.editing && state.dirty){ e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ---------- timeline gear + popover ---------- */
+const gear = $('#emGear'), pop = $('#emPop');
+let gearT;
+function showGear(t){
+  const r = t.getBoundingClientRect();
+  const thin = r.width < 12;
+  gear.style.left = (thin ? r.right + 4 : r.right - 12) + scrollX + 'px';
+  gear.style.top  = (thin ? r.top + 14 : r.top - 12) + scrollY + 'px';
+  gear.style.display = 'block';
+  gear._target = t;
+}
+function hideGear(){ gear.style.display = 'none'; gear._target = null; }
+document.addEventListener('mouseover', e => {
+  if(!state.editing) return;
+  if(e.target === gear){ clearTimeout(gearT); return; }
+  const t = e.target.closest && e.target.closest(TL_SEL);
+  if(t && t.closest('.bar-track')){ clearTimeout(gearT); showGear(t); }
+  else { clearTimeout(gearT); gearT = setTimeout(hideGear, 450); }
+});
+gear.addEventListener('mousedown', e => e.preventDefault());
+gear.addEventListener('click', () => { if(gear._target) openPop(gear._target); });
+/* marker lines have no text: click them directly */
+document.addEventListener('click', e => {
+  if(!state.editing) return;
+  const l = e.target.closest && e.target.closest(LINE_SEL);
+  if(l && l.closest('.bar-track')) openPop(l);
+});
+
+function monthsOf(tl){
+  let yr = '';
+  return $$('.months > div', tl).slice(1).map(d => {
+    const m = d.textContent.trim(), mm = m.match(/-(\d{2})$/);
+    if(mm){ yr = mm[1]; return m; }
+    return yr ? m + '-' + yr : m;
+  });
+}
+const pct = v => Math.round(v * 100) / 100;
+function toHex(c){
+  if(!c) return '#000000';
+  if(c[0] === '#'){ return c.length === 4 ? '#' + [...c.slice(1)].map(x => x + x).join('') : c.slice(0,7); }
+  const n = c.match(/\d+(\.\d+)?/g); if(!n) return '#000000';
+  return '#' + n.slice(0,3).map(x => (+x).toString(16).padStart(2,'0')).join('');
+}
+function lighten(hex, amt=.55){
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n>>16)&255, (n>>8)&255, n&255].map(v => Math.round(v + (255 - v) * amt));
+  return '#' + ch.map(v => v.toString(16).padStart(2,'0')).join('');
+}
+const isHatched = el => /repeating-linear-gradient/.test(el.style.background || el.style.backgroundImage || '');
+function baseColor(el){
+  if(el.matches('.bar')){
+    const bg = el.style.background || el.style.backgroundImage || el.style.backgroundColor || getComputedStyle(el).backgroundColor;
+    const m = bg.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]+\)/i);
+    return toHex(m ? m[0] : getComputedStyle(el).backgroundColor);
+  }
+  if(el.matches(LINE_SEL)) return toHex(el.style.background || el.style.backgroundColor || getComputedStyle(el).backgroundColor);
+  return toHex(el.style.color || getComputedStyle(el).color);
+}
+function paint(el, hex, hatched){
+  if(el.matches('.bar')){
+    const w = parseFloat((el.style.background.match(/(\d+)px/) || [])[1]) || 7;
+    el.style.background = hatched ? `repeating-linear-gradient(45deg,${hex},${hex} ${w}px,${lighten(hex)} ${w}px,${lighten(hex)} ${w*2}px)` : hex;
+  }else if(el.matches(LINE_SEL)) el.style.background = hex;
+  else el.style.color = hex;
+}
+function linkedOf(el){
+  const L = parseFloat(el.style.left);
+  return $$(POINT_SEL, el.parentElement).filter(x => x !== el && Math.abs(parseFloat(x.style.left) - L) < 0.05);
+}
+const TYPE_NAMES = { bar:'แถบ (Bar)', 'pay-tag':'ป้ายการจ่ายเงิน', marker:'เส้น Milestone', 'marker-label':'ป้าย Milestone', 'deadline-line':'เส้น Deadline', 'deadline-label':'ป้าย Deadline' };
+
+function openPop(el){
+  closePop();
+  hideGear();
+  state.popTarget = el;
+  el.classList.add('em-tl-selected');
+  const months = monthsOf(el.closest('.timeline')), N = months.length;
+  const isBar = el.matches('.bar');
+  const type = Object.keys(TYPE_NAMES).find(k => el.classList.contains(k));
+  const left = parseFloat(el.style.left) || 0, width = parseFloat(el.style.width) || 0;
+  const color = baseColor(el);
+  const linked = isBar ? [] : linkedOf(el);
+
+  let html = `<h4>⚙ ${TYPE_NAMES[type] || 'รายการ'}</h4>`;
+  if(isBar){
+    const s = Math.min(N-1, Math.max(0, Math.round(left / 100 * N)));
+    const e = Math.min(N-1, Math.max(s, Math.round((left + width) / 100 * N) - 1));
+    const opt = sel => months.map((m,i) => `<option value="${i}" ${i===sel?'selected':''}>${esc(m)}</option>`).join('');
+    html += `
+      <div class="f"><label>เดือนเริ่ม</label><select data-k="ms">${opt(s)}</select></div>
+      <div class="f"><label>เดือนสิ้นสุด</label><select data-k="me">${opt(e)}</select></div>
+      <div class="f"><label>ปรับละเอียด %</label><div class="pair">
+        <input type="number" step="0.01" min="0" max="100" data-k="left" value="${pct(left)}" title="left %">
+        <input type="number" step="0.01" min="0" max="100" data-k="width" value="${pct(width)}" title="width %">
+      </div></div>
+      <div class="hint">ซ้าย = ตำแหน่งเริ่ม (%), ขวา = ความยาว (%)</div>
+      <div class="f"><label>สี</label><div class="pair" style="align-items:center">
+        <input type="color" data-k="color" value="${color}">
+        <select data-k="style"><option value="solid" ${isHatched(el)?'':'selected'}>ทึบ</option><option value="hatch" ${isHatched(el)?'selected':''}>ลายทแยง</option></select>
+      </div></div>`;
+  }else{
+    const p = Math.min(N, Math.max(0, Math.round(left / 100 * N)));
+    const opts = Array.from({length:N+1}, (_,i) => `<option value="${i}" ${i===p?'selected':''}>${i<N ? 'ต้น ' + esc(months[i]) : 'ปลาย ' + esc(months[N-1])}</option>`).join('');
+    html += `
+      <div class="f"><label>ตำแหน่ง</label><select data-k="mp">${opts}</select></div>
+      <div class="f"><label>ปรับละเอียด %</label><input type="number" step="0.01" min="0" max="100" data-k="left" value="${pct(left)}"></div>
+      <div class="f"><label>สี</label><input type="color" data-k="color" value="${color}"></div>
+      ${linked.length ? `<label class="chk"><input type="checkbox" data-k="link" checked> ย้าย/เปลี่ยนสีรายการที่ตำแหน่งเดียวกันด้วย (${linked.length})</label>` : ''}`;
+  }
+  html += `<div class="acts"><button type="button" data-a="dup">⧉ ทำซ้ำ</button><button type="button" data-a="del" class="del">✕ ลบ</button><button type="button" data-a="close">ปิด</button></div>`;
+  pop.innerHTML = html;
+  pop.style.display = 'block';
+
+  const r = el.getBoundingClientRect();
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let x = r.left + scrollX, y = r.bottom + scrollY + 10;
+  x = Math.min(Math.max(8 + scrollX, x), scrollX + innerWidth - pw - 8);
+  if(r.bottom + ph + 20 > innerHeight) y = r.top + scrollY - ph - 10;
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+
+  const q = k => pop.querySelector(`[data-k="${k}"]`);
+  const targets = () => [el, ...((q('link') && q('link').checked) ? linked : [])];
+  const setLeft = v => targets().forEach(t => t.style.left = pct(v) + '%');
+
+  pop.oninput = pop.onchange = ev => {
+    const k = ev.target.dataset.k; if(!k) return;
+    if(k === 'ms' || k === 'me'){
+      let s = +q('ms').value, e = +q('me').value;
+      if(e < s){ e = s; q('me').value = s; }
+      el.style.left  = pct(s / N * 100) + '%';
+      el.style.width = pct((e - s + 1) / N * 100) + '%';
+      q('left').value = pct(s / N * 100); q('width').value = pct((e - s + 1) / N * 100);
+    }else if(k === 'left'){
+      const v = Math.min(100, Math.max(0, +ev.target.value || 0));
+      isBar ? el.style.left = pct(v) + '%' : setLeft(v);
+    }else if(k === 'width'){
+      el.style.width = pct(Math.min(100, Math.max(0.5, +ev.target.value || 0))) + '%';
+    }else if(k === 'mp'){
+      const v = +q('mp').value / N * 100; setLeft(v); q('left').value = pct(v);
+    }else if(k === 'color' || k === 'style'){
+      const hex = q('color').value, hatch = q('style') && q('style').value === 'hatch';
+      isBar ? paint(el, hex, hatch) : targets().forEach(t => paint(t, hex, false));
+    }else return;
+    markDirty();
+  };
+  pop.onclick = ev => {
+    const a = ev.target.dataset.a; if(!a) return;
+    if(a === 'close') return closePop();
+    if(a === 'dup'){
+      const c = el.cloneNode(true); c.classList.remove('em-tl-selected');
+      el.after(c); markEditable(true); markDirty(); openPop(c);
+    }
+    if(a === 'del'){
+      if(!confirm('ลบรายการนี้?')) return;
+      closePop(); el.remove(); markDirty();
+    }
+  };
+}
+function closePop(){
+  if(state.popTarget) state.popTarget.classList.remove('em-tl-selected');
+  state.popTarget = null;
+  pop.style.display = 'none'; pop.innerHTML = '';
+}
+document.addEventListener('mousedown', e => {
+  if(pop.style.display !== 'block') return;
+  if(pop.contains(e.target) || e.target === gear || (e.target.closest && e.target.closest(LINE_SEL))) return;
+  closePop();
+});
+
+/* ---------- start ---------- */
+initBackend();
 </script>
 
 </body>
