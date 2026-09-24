@@ -190,6 +190,12 @@
   .em-palette .reset:hover{background:#343944;}
   .em-palette .tip{font-size:10.5px;color:#9ca3af;margin-top:8px;line-height:1.4;}
 
+  .em-range-f{display:grid;grid-template-columns:56px 1fr 90px;gap:8px;align-items:center;margin-bottom:10px;}
+  .em-range-f label{font-size:12.5px;color:var(--muted);font-weight:600;}
+  .em-range-f select,.em-range-f input{padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;width:100%;}
+  .em-range-chk{display:flex;gap:8px;align-items:center;font-size:12.5px;margin:4px 0 10px;cursor:pointer;}
+  .em-range-prev{font-size:12px;color:#1e4d7b;background:#f0f7ff;border:1px solid #bdd9f7;border-radius:8px;padding:8px 10px;line-height:1.5;}
+
   .em-toast{position:fixed;top:72px;right:20px;z-index:320;background:#1a1d23;color:#fff;padding:10px 14px;border-radius:10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none;max-width:340px;}
   .em-toast.show{opacity:1;transform:none;}
   .em-toast.warn{background:#92400e;}
@@ -656,6 +662,7 @@
   <button type="button" id="emDel" class="danger" disabled title="ลบรายการที่เลือก">✕ ลบ</button>
   <button type="button" id="emAddBar" disabled title="เพิ่มแถบใหม่ในแถว Timeline ที่เลือก">＋ แถบ</button>
   <button type="button" id="emColor" disabled title="เปลี่ยนสีตัวอักษร — ลากเลือกข้อความ หรือคลิกในช่องเพื่อเปลี่ยนทั้งช่อง">🎨 สีตัวอักษร</button>
+  <button type="button" id="emRangeBtn" title="ปรับช่วงเดือนของ Timeline ในหน้านี้">📅 ช่วง Timeline</button>
   <div class="sep"></div>
   <button type="button" id="emRevert" title="ย้อนทุกการแก้ไขตั้งแต่เข้าโหมดแก้ไข">↶ ย้อนกลับ</button>
   <button type="button" id="emReset" title="คืนเนื้อหาตามต้นฉบับในไฟล์ HTML">⟲ ค่าเริ่มต้น</button>
@@ -692,6 +699,22 @@
   <div class="tip">ลากเลือกข้อความ = เปลี่ยนเฉพาะส่วนที่เลือก<br>คลิกวาง cursor = เปลี่ยนทั้งช่อง</div>
 </div>
 
+<div class="em-modal" id="emRange" role="dialog" aria-modal="true" aria-labelledby="emRangeTitle">
+  <div class="em-modal-box" style="width:360px;">
+    <h3 id="emRangeTitle">📅 ช่วง Timeline</h3>
+    <p id="emRangePage">ปรับช่วงเดือนของ Timeline ในหน้านี้</p>
+    <div class="em-range-f"><label>เริ่ม</label><select id="emRsM"></select><input type="number" id="emRsY" min="2000" max="2099"></div>
+    <div class="em-range-f"><label>สิ้นสุด</label><select id="emReM"></select><input type="number" id="emReY" min="2000" max="2099"></div>
+    <label class="em-range-chk"><input type="checkbox" id="emRKeep" checked> คงแถบและ milestone ไว้ที่เดือนจริง</label>
+    <div class="em-range-prev" id="emRPrev"></div>
+    <div class="err" id="emRErr"></div>
+    <div class="acts">
+      <button type="button" id="emRCancel">ยกเลิก</button>
+      <button type="button" id="emROk" class="primary">ใช้ช่วงนี้</button>
+    </div>
+  </div>
+</div>
+
 <div class="em-toast" id="emToast"></div>
 
 <script>
@@ -709,7 +732,7 @@ function switchTab(id){
    ⚙️ CONFIG — แก้ค่าในส่วนนี้ก่อน deploy
    ================================================================ */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAf1b9B0mkL1UV4DAZfEfxNiXeJXdn84Ig",
+apiKey: "AIzaSyAf1b9B0mkL1UV4DAZfEfxNiXeJXdn84Ig",
   authDomain: "project-schedule-dashboard.firebaseapp.com",
   databaseURL: "https://project-schedule-dashboard-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "project-schedule-dashboard",
@@ -1138,6 +1161,121 @@ document.addEventListener('mousedown', e => {
   if(palette.classList.contains('show') && !palette.contains(e.target) && e.target !== colorBtn) closePalette();
 });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closePalette(); });
+
+/* ---------- timeline range (per page) ---------- */
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MON_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const MAX_MONTHS = 60;
+const serialName = s => MON[s % 12] + '-' + String(Math.floor(s / 12) % 100).padStart(2, '0');
+function parseRange(tl){
+  const arr = monthsOf(tl); if(!arr.length) return null;
+  const f = arr[0].match(/^([A-Za-z]{3})[A-Za-z]*-(\d{2})$/); if(!f) return null;
+  const mi = MON.findIndex(m => m.toLowerCase() === f[1].toLowerCase()); if(mi < 0) return null;
+  return { start: (2000 + +f[2]) * 12 + mi, n: arr.length };
+}
+function buildLabels(start, n){
+  return Array.from({ length:n }, (_, i) => {
+    const s = start + i, withYr = n <= 12 || i === 0 || i === n - 1 || (s % 12) % 3 === 0;
+    return withYr ? serialName(s) : MON[s % 12];
+  });
+}
+function applyRange(tl, newStart, newN, keep){
+  const old = parseRange(tl);
+  const monthsEl = $('.months', tl);
+  const labelW = parseFloat(getComputedStyle(monthsEl).gridTemplateColumns.split(' ')[0]) || 160;
+
+  const plan = $$('.bar-track > *', tl).filter(el => el.matches(TL_SEL)).map(el => {
+    const isBar = el.matches('.bar');
+    const L = parseFloat(el.style.left) || 0, W = isBar ? (parseFloat(el.style.width) || 0) : 0;
+    let nl = L, nw = W;
+    if(keep && old){
+      nl = ((old.start + L / 100 * old.n) - newStart) / newN * 100;
+      nw = (W / 100 * old.n) / newN * 100;
+    }
+    const end = nl + nw;
+    const out = isBar ? (end <= 0.01 || nl >= 99.99) : (nl < -0.01 || nl > 100.01);
+    const clip = isBar && !out && (nl < -0.01 || end > 100.01);
+    return { el, isBar, nl, nw, out, clip };
+  });
+
+  const nOut = plan.filter(p => p.out && !p.el.hasAttribute('data-em-out')).length;
+  const nClip = plan.filter(p => p.clip).length;
+  if(nOut || nClip){
+    const msg = ['ช่วงใหม่ทำให้:'];
+    if(nOut)  msg.push(`• ${nOut} รายการอยู่นอกช่วง → จะถูกซ่อนไว้ (ขยายช่วงกลับมาจะแสดงอีกครั้ง)`);
+    if(nClip) msg.push(`• ${nClip} แถบเกินขอบบางส่วน → จะถูกตัดให้พอดีช่วง`);
+    msg.push('', 'ดำเนินการต่อ?');
+    if(!confirm(msg.join('\n'))) return false;
+  }
+
+  plan.forEach(({ el, isBar, nl, nw, out, clip }) => {
+    if(clip){ if(nl < 0){ nw += nl; nl = 0; } if(nl + nw > 100) nw = 100 - nl; }
+    el.style.left = pct(nl) + '%';
+    if(isBar) el.style.width = pct(nw) + '%';
+    if(out){ el.style.display = 'none'; el.setAttribute('data-em-out', '1'); }
+    else if(el.hasAttribute('data-em-out')){ el.style.display = ''; el.removeAttribute('data-em-out'); }
+  });
+
+  const gtc  = `${labelW}px repeat(${newN},1fr)`;
+  const minW = Math.max(760, Math.round(labelW + newN * 45)) + 'px';
+  monthsEl.innerHTML = '<div></div>' + buildLabels(newStart, newN).map(l => `<div>${l}</div>`).join('');
+  monthsEl.style.gridTemplateColumns = gtc; monthsEl.style.minWidth = minW;
+  const rows = $('.rows', tl); if(rows) rows.style.minWidth = minW;
+  $$('.row', tl).forEach(r => r.style.gridTemplateColumns = gtc);
+  $$('.bar-track', tl).forEach(t => t.style.gridColumn = `2/${newN + 2}`);
+  return true;
+}
+
+const rangeModal = $('#emRange');
+const rq = id => $('#' + id);
+['emRsM','emReM'].forEach(id => rq(id).innerHTML = MON_TH.map((m, i) => `<option value="${i}">${m} (${MON[i]})</option>`).join(''));
+let rangeTl = null;
+function rangeVals(){
+  const s = (+rq('emRsY').value) * 12 + (+rq('emRsM').value);
+  const e = (+rq('emReY').value) * 12 + (+rq('emReM').value);
+  return { s, e, n: e - s + 1 };
+}
+function updateRangePreview(){
+  const { s, e, n } = rangeVals(), cur = parseRange(rangeTl);
+  const err = rq('emRErr'), ok = rq('emROk');
+  if(!(+rq('emRsY').value) || !(+rq('emReY').value)){ err.textContent = 'กรุณาใส่ปี (ค.ศ.)'; ok.disabled = true; return; }
+  if(n < 1){ err.textContent = 'เดือนสิ้นสุดต้องไม่ก่อนเดือนเริ่ม'; ok.disabled = true; }
+  else if(n > MAX_MONTHS){ err.textContent = `ช่วงยาวได้ไม่เกิน ${MAX_MONTHS} เดือน`; ok.disabled = true; }
+  else { err.textContent = ''; ok.disabled = false; }
+  rq('emRPrev').innerHTML = cur
+    ? `ปัจจุบัน: ${serialName(cur.start)} → ${serialName(cur.start + cur.n - 1)} (${cur.n} เดือน)<br>ใหม่: <strong>${n >= 1 ? serialName(s) + ' → ' + serialName(e) + ' (' + n + ' เดือน)' : '—'}</strong>`
+    : `ใหม่: <strong>${n >= 1 ? n + ' เดือน' : '—'}</strong><br>อ่านเดือนปัจจุบันไม่ได้ แถบจะคงตำแหน่ง % เดิม`;
+}
+function openRange(){
+  const page = $('.page.active');
+  rangeTl = page && $('.timeline', page);
+  if(!rangeTl){ toast('หน้านี้ไม่มี Timeline', 'warn'); return; }
+  closePop(); closePalette();
+  const cur = parseRange(rangeTl);
+  const s = cur ? cur.start : new Date().getFullYear() * 12;
+  const e = cur ? cur.start + cur.n - 1 : s + 11;
+  rq('emRsM').value = s % 12; rq('emRsY').value = Math.floor(s / 12);
+  rq('emReM').value = e % 12; rq('emReY').value = Math.floor(e / 12);
+  rq('emRKeep').checked = true; rq('emRKeep').disabled = !cur;
+  const tab = $$('.tab-btn')[PAGES.indexOf(page.id.replace('page-',''))];
+  rq('emRangePage').textContent = 'หน้า: ' + (tab ? tab.textContent.trim() : page.id);
+  updateRangePreview();
+  rangeModal.classList.add('show');
+}
+['emRsM','emRsY','emReM','emReY'].forEach(id => rq(id).addEventListener('input', updateRangePreview));
+rq('emRCancel').onclick = () => rangeModal.classList.remove('show');
+rangeModal.addEventListener('mousedown', e => { if(e.target === rangeModal) rangeModal.classList.remove('show'); });
+rangeModal.addEventListener('keydown', e => { if(e.key === 'Escape') rangeModal.classList.remove('show'); });
+rq('emROk').onclick = () => {
+  const { s, n } = rangeVals();
+  if(n < 1 || n > MAX_MONTHS) return;
+  if(applyRange(rangeTl, s, n, rq('emRKeep').checked && !rq('emRKeep').disabled)){
+    rangeModal.classList.remove('show');
+    markDirty();
+    toast('ปรับช่วง Timeline แล้ว — กดบันทึกเพื่อยืนยัน', 'ok');
+  }
+};
+$('#emRangeBtn').onclick = openRange;
 
 /* ---------- export / import ---------- */
 $('#emExport').onclick = () => {
