@@ -134,6 +134,8 @@
   body.editing .tab-btn{cursor:pointer;}
   body.editing .marker,body.editing .deadline-line{cursor:pointer;}
   body.editing .marker::before,body.editing .deadline-line::before{content:"";position:absolute;left:-5px;right:-5px;top:0;bottom:0;}
+  body.editing .legend .dot{cursor:pointer;box-shadow:0 0 0 2px transparent;transition:box-shadow .15s;}
+  body.editing .legend .dot:hover{box-shadow:0 0 0 2px #fff,0 0 0 4px #2563eb;}
   .em-block-selected{box-shadow:0 0 0 2px #f59e0b !important;border-radius:6px;}
   .em-tl-selected{box-shadow:0 0 0 2px #1a1d23,0 0 0 4px #fbbf24 !important;}
 
@@ -933,6 +935,10 @@ function markEditable(on){
     else { el.removeAttribute('contenteditable'); el.removeAttribute('spellcheck'); }
   });
   $$('.tab-btn').forEach(b => b.title = on ? 'ดับเบิลคลิกเพื่อเปลี่ยนชื่อแท็บ' : '');
+  $$('.page .legend .dot').forEach(d => {
+    if(on){ d.setAttribute('contenteditable','false'); d.title = 'คลิกเพื่อเปลี่ยนสี'; }
+    else { d.removeAttribute('contenteditable'); d.removeAttribute('title'); }
+  });
 }
 function enterEdit(){
   state.editing = true; state.dirty = false;
@@ -1403,6 +1409,7 @@ function monthsOf(tl){
 const pct = v => Math.round(v * 100) / 100;
 function toHex(c){
   if(!c) return '#000000';
+  c = c.trim().toLowerCase();
   if(c[0] === '#'){ return c.length === 4 ? '#' + [...c.slice(1)].map(x => x + x).join('') : c.slice(0,7); }
   const n = c.match(/\d+(\.\d+)?/g); if(!n) return '#000000';
   return '#' + n.slice(0,3).map(x => (+x).toString(16).padStart(2,'0')).join('');
@@ -1434,6 +1441,39 @@ function linkedOf(el){
   return $$(POINT_SEL, el.parentElement).filter(x => x !== el && Math.abs(parseFloat(x.style.left) - L) < 0.05);
 }
 const TYPE_NAMES = { bar:'แถบ (Bar)', 'pay-tag':'ป้ายการจ่ายเงิน', marker:'เส้น Milestone', 'marker-label':'ป้าย Milestone', 'deadline-line':'เส้น Deadline', 'deadline-label':'ป้าย Deadline' };
+
+/* items in the same timeline panel sharing a color (bars, lines, labels, legend dots) */
+function colorOf(el){
+  if(el.matches('.card')) return toHex(el.style.getPropertyValue('--c') || '');
+  if(el.matches('.dot, .badge')) return toHex(el.style.background || el.style.backgroundColor || getComputedStyle(el).backgroundColor);
+  return baseColor(el);
+}
+function paintAny(el, hex){
+  if(el.matches('.card')) el.style.setProperty('--c', hex);
+  else if(el.matches('.dot, .badge')) el.style.background = hex;
+  else if(el.matches('.bar')) paint(el, hex, isHatched(el));
+  else paint(el, hex, false);
+}
+/* scope 'tl' = this Timeline panel; 'page' = whole project page (timeline, legend, phase cards, table badges) */
+function colorGroup(el, hex, scope = 'page'){
+  const root = scope === 'page' ? el.closest('.page') : el.closest('.panel');
+  if(!root) return [];
+  let items = [...$$('.bar-track > *', root).filter(x => x.matches(TL_SEL)), ...$$('.legend .dot', root)];
+  if(scope === 'page') items = items.concat($$('.card', root), $$('.badge', root));
+  return items.filter(x => x !== el && colorOf(x) === hex.toLowerCase());
+}
+function scopeField(el, color, exclude = []){
+  const gPage = colorGroup(el, color, 'page').filter(x => !exclude.includes(x));
+  const gTl   = colorGroup(el, color, 'tl').filter(x => !exclude.includes(x));
+  const html = `<div class="f"><label>ขอบเขตสี</label><select data-k="scope">
+      <option value="page" selected>ทั้งหน้า (${gPage.length} รายการ)</option>
+      <option value="tl">เฉพาะ Timeline (${gTl.length})</option>
+      <option value="one">เฉพาะรายการนี้</option>
+    </select></div>
+    <div class="hint">"ทั้งหน้า" รวมการ์ด Phase, badge ในตาราง, legend, แถบและเส้นที่ใช้สีเดียวกัน</div>`;
+  const pick = v => v === 'page' ? gPage : v === 'tl' ? gTl : [];
+  return { html, pick };
+}
 
 function openPop(el){
   closePop();
@@ -1481,6 +1521,8 @@ function openPop(el){
       <div class="f"><label>สี</label><input type="color" data-k="color" value="${color}"></div>
       ${linked.length ? `<label class="chk"><input type="checkbox" data-k="link" checked> ย้าย/เปลี่ยนสีรายการที่ตำแหน่งเดียวกันด้วย (${linked.length})</label>` : ''}`;
   }
+  const scope = scopeField(el, color, linked);
+  html += scope.html;
   html += `<div class="acts"><button type="button" data-a="dup">⧉ ทำซ้ำ</button><button type="button" data-a="del" class="del">✕ ลบ</button><button type="button" data-a="close">ปิด</button></div>`;
   pop.innerHTML = html;
   pop.style.display = 'block';
@@ -1514,7 +1556,9 @@ function openPop(el){
     }else if(k === 'color' || k === 'style'){
       const hex = q('color').value, hatch = q('style') && q('style').value === 'hatch';
       isBar ? paint(el, hex, hatch) : targets().forEach(t => paint(t, hex, false));
-    }else return;
+      if(k === 'color') scope.pick(q('scope').value).forEach(g => paintAny(g, hex));
+    }else if(k === 'scope'){ return; }
+    else return;
     markDirty();
   };
   pop.onclick = ev => {
@@ -1531,6 +1575,37 @@ function openPop(el){
     }
   };
 }
+function openDotPop(dot){
+  closePop(); hideGear();
+  state.popTarget = dot;
+  dot.classList.add('em-tl-selected');
+  const color = colorOf(dot), scope = scopeField(dot, color);
+  pop.innerHTML = `<h4>⚙ สีใน Legend</h4>
+    <div class="f"><label>สี</label><input type="color" data-k="color" value="${color}"></div>
+    ${scope.html}
+    <div class="acts"><button type="button" data-a="close">ปิด</button></div>`;
+  pop.style.display = 'block';
+  const r = dot.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let x = Math.min(Math.max(8 + scrollX, r.left + scrollX), scrollX + innerWidth - pw - 8);
+  let y = r.bottom + scrollY + 10;
+  if(r.bottom + ph + 20 > innerHeight) y = r.top + scrollY - ph - 10;
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  const q = k => pop.querySelector(`[data-k="${k}"]`);
+  pop.oninput = pop.onchange = ev => {
+    if(ev.target.dataset.k !== 'color') return;
+    const hex = ev.target.value;
+    dot.style.background = hex;
+    scope.pick(q('scope').value).forEach(g => paintAny(g, hex));
+    markDirty();
+  };
+  pop.onclick = ev => { if(ev.target.dataset.a === 'close') closePop(); };
+}
+document.addEventListener('click', e => {
+  if(!state.editing) return;
+  const d = e.target.closest && e.target.closest('.page .legend .dot');
+  if(d){ e.preventDefault(); openDotPop(d); }
+});
+
 function closePop(){
   const tl = state.popTarget && state.popTarget.closest('.timeline');
   if(state.popTarget) state.popTarget.classList.remove('em-tl-selected');
@@ -1540,7 +1615,7 @@ function closePop(){
 }
 document.addEventListener('mousedown', e => {
   if(pop.style.display !== 'block') return;
-  if(pop.contains(e.target) || e.target === gear || (e.target.closest && e.target.closest(LINE_SEL))) return;
+  if(pop.contains(e.target) || e.target === gear || (e.target.closest && e.target.closest(LINE_SEL + ', .legend .dot'))) return;
   closePop();
 });
 
