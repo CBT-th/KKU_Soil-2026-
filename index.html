@@ -194,6 +194,8 @@
   .em-range-f label{font-size:12.5px;color:var(--muted);font-weight:600;}
   .em-range-f select,.em-range-f input{padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;width:100%;}
   .em-range-chk{display:flex;gap:8px;align-items:center;font-size:12.5px;margin:4px 0 10px;cursor:pointer;}
+  .em-range-fit{width:100%;padding:8px 10px;border-radius:8px;border:1px dashed #2563eb;background:#f0f7ff;color:#1d4ed8;font-weight:600;font-size:12.5px;cursor:pointer;font-family:inherit;margin-bottom:8px;}
+  .em-range-fit:hover{background:#dbeafe;}
   .em-range-prev{font-size:12px;color:#1e4d7b;background:#f0f7ff;border:1px solid #bdd9f7;border-radius:8px;padding:8px 10px;line-height:1.5;}
 
   .em-toast{position:fixed;top:72px;right:20px;z-index:320;background:#1a1d23;color:#fff;padding:10px 14px;border-radius:10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none;max-width:340px;}
@@ -706,6 +708,8 @@
     <div class="em-range-f"><label>เริ่ม</label><select id="emRsM"></select><input type="number" id="emRsY" min="2000" max="2099"></div>
     <div class="em-range-f"><label>สิ้นสุด</label><select id="emReM"></select><input type="number" id="emReY" min="2000" max="2099"></div>
     <label class="em-range-chk"><input type="checkbox" id="emRKeep" checked> คงแถบและ milestone ไว้ที่เดือนจริง</label>
+    <button type="button" id="emRFit" class="em-range-fit">⤢ พอดีกับแถบทั้งหมด</button>
+    <label class="em-range-chk"><input type="checkbox" id="emRAuto"> หดช่วงให้พอดีกับแถบอัตโนมัติด้วย (หน้านี้)</label>
     <div class="em-range-prev" id="emRPrev"></div>
     <div class="err" id="emRErr"></div>
     <div class="acts">
@@ -1072,9 +1076,11 @@ $('#emDup').onclick = () => {
 $('#emDel').onclick = () => {
   const b = state.block; if(!b) return;
   if(!confirm('ลบรายการที่เลือก?')) return;
+  const tl = b.closest('.timeline');
   selectBlock(null); closePop();
   b.matches('tr') ? deleteRow(b) : b.remove();
   markDirty();
+  if(tl) maybeAutofit(tl);
 };
 $('#emAddBar').onclick = () => {
   const row = state.block; if(!row || !row.matches('.row')) return;
@@ -1226,6 +1232,41 @@ function applyRange(tl, newStart, newN, keep){
   return true;
 }
 
+/* fit range to all timeline items (bars, milestones, labels — including ones hidden by range) */
+function computeFit(tl, includeHidden = true){
+  const cur = parseRange(tl); if(!cur) return null;
+  let lo = Infinity, hi = -Infinity;
+  $$('.bar-track > *', tl).filter(el => el.matches(TL_SEL)).forEach(el => {
+    if(el.style.display === 'none' && !(includeHidden && el.hasAttribute('data-em-out'))) return;
+    const L = parseFloat(el.style.left) || 0;
+    const a = cur.start + L / 100 * cur.n;
+    const b = el.matches('.bar') ? a + (parseFloat(el.style.width) || 0) / 100 * cur.n : a;
+    lo = Math.min(lo, a); hi = Math.max(hi, b);
+  });
+  if(!isFinite(lo)) return null;
+  const TOL = 0.05;   // ~1.5 days: absorbs % rounding from earlier range changes
+  const start = Math.floor(lo + TOL);
+  const endEx = Math.max(Math.ceil(hi - TOL), start + 1);
+  return { start, n: endEx - start };
+}
+const autoOn = tl => tl && tl.getAttribute('data-em-autofit') === '1';
+function maybeAutofit(tl){
+  if(!state.editing || !tl || !document.contains(tl)) return;
+  const cur = parseRange(tl), fit = computeFit(tl, autoOn(tl));
+  if(!cur || !fit) return;
+  let start = fit.start, n = fit.n;
+  if(!autoOn(tl)){
+    // extend only — never shrink or hide anything unless autofit is on
+    start = Math.min(cur.start, fit.start);
+    n = Math.max(cur.start + cur.n, fit.start + fit.n) - start;
+  }
+  if(start === cur.start && n === cur.n) return;
+  if(n > MAX_MONTHS){ toast(`แถบกินช่วงเกิน ${MAX_MONTHS} เดือน — ไม่ได้ปรับช่วงอัตโนมัติ`, 'warn'); return; }
+  applyRange(tl, start, n, true);
+  markDirty();
+  toast(`ปรับช่วงเป็น ${serialName(start)} → ${serialName(start + n - 1)} (${n} เดือน)`, 'ok');
+}
+
 const rangeModal = $('#emRange');
 const rq = id => $('#' + id);
 ['emRsM','emReM'].forEach(id => rq(id).innerHTML = MON_TH.map((m, i) => `<option value="${i}">${m} (${MON[i]})</option>`).join(''));
@@ -1257,6 +1298,8 @@ function openRange(){
   rq('emRsM').value = s % 12; rq('emRsY').value = Math.floor(s / 12);
   rq('emReM').value = e % 12; rq('emReY').value = Math.floor(e / 12);
   rq('emRKeep').checked = true; rq('emRKeep').disabled = !cur;
+  rq('emRAuto').checked = autoOn(rangeTl); rq('emRAuto').disabled = !cur;
+  rq('emRFit').disabled = !cur;
   const tab = $$('.tab-btn')[PAGES.indexOf(page.id.replace('page-',''))];
   rq('emRangePage').textContent = 'หน้า: ' + (tab ? tab.textContent.trim() : page.id);
   updateRangePreview();
@@ -1266,13 +1309,28 @@ function openRange(){
 rq('emRCancel').onclick = () => rangeModal.classList.remove('show');
 rangeModal.addEventListener('mousedown', e => { if(e.target === rangeModal) rangeModal.classList.remove('show'); });
 rangeModal.addEventListener('keydown', e => { if(e.key === 'Escape') rangeModal.classList.remove('show'); });
+rq('emRFit').onclick = () => {
+  const fit = computeFit(rangeTl);
+  if(!fit){ toast('ไม่พบแถบใน Timeline นี้', 'warn'); return; }
+  const e = fit.start + fit.n - 1;
+  rq('emRsM').value = fit.start % 12; rq('emRsY').value = Math.floor(fit.start / 12);
+  rq('emReM').value = e % 12;         rq('emReY').value = Math.floor(e / 12);
+  rq('emRKeep').checked = true;
+  updateRangePreview();
+};
 rq('emROk').onclick = () => {
   const { s, n } = rangeVals();
   if(n < 1 || n > MAX_MONTHS) return;
-  if(applyRange(rangeTl, s, n, rq('emRKeep').checked && !rq('emRKeep').disabled)){
-    rangeModal.classList.remove('show');
+  const autoChanged = rq('emRAuto').checked !== autoOn(rangeTl);
+  const cur = parseRange(rangeTl);
+  const rangeChanged = !cur || cur.start !== s || cur.n !== n;
+  if(rangeChanged && !applyRange(rangeTl, s, n, rq('emRKeep').checked && !rq('emRKeep').disabled)) return;
+  if(rq('emRAuto').checked) rangeTl.setAttribute('data-em-autofit', '1');
+  else rangeTl.removeAttribute('data-em-autofit');
+  rangeModal.classList.remove('show');
+  if(rangeChanged || autoChanged){
     markDirty();
-    toast('ปรับช่วง Timeline แล้ว — กดบันทึกเพื่อยืนยัน', 'ok');
+    toast(rangeChanged ? 'ปรับช่วง Timeline แล้ว — กดบันทึกเพื่อยืนยัน' : 'ตั้งค่าอัตโนมัติแล้ว — กดบันทึกเพื่อยืนยัน', 'ok');
   }
 };
 $('#emRangeBtn').onclick = openRange;
@@ -1383,6 +1441,9 @@ function openPop(el){
   state.popTarget = el;
   el.classList.add('em-tl-selected');
   const months = monthsOf(el.closest('.timeline')), N = months.length;
+  const rng = parseRange(el.closest('.timeline'));
+  const pad = rng ? 24 : 0;   // months offered beyond the current range; timeline extends on close
+  const mName = i => rng ? serialName(rng.start + i) : months[i];
   const isBar = el.matches('.bar');
   const type = Object.keys(TYPE_NAMES).find(k => el.classList.contains(k));
   const left = parseFloat(el.style.left) || 0, width = parseFloat(el.style.width) || 0;
@@ -1390,10 +1451,12 @@ function openPop(el){
   const linked = isBar ? [] : linkedOf(el);
 
   let html = `<h4>⚙ ${TYPE_NAMES[type] || 'รายการ'}</h4>`;
+  if(pad) html += `<div class="hint">เดือนที่มี ＋ อยู่นอกช่วงปัจจุบัน — Timeline จะขยายให้อัตโนมัติเมื่อปิดหน้าต่างนี้</div>`;
   if(isBar){
-    const s = Math.min(N-1, Math.max(0, Math.round(left / 100 * N)));
-    const e = Math.min(N-1, Math.max(s, Math.round((left + width) / 100 * N) - 1));
-    const opt = sel => months.map((m,i) => `<option value="${i}" ${i===sel?'selected':''}>${esc(m)}</option>`).join('');
+    const s = Math.min(N-1+pad, Math.max(-pad, Math.round(left / 100 * N)));
+    const e = Math.min(N-1+pad, Math.max(s, Math.round((left + width) / 100 * N) - 1));
+    const idxs = Array.from({length: N + 2*pad}, (_,k) => k - pad);
+    const opt = sel => idxs.map(i => `<option value="${i}" ${i===sel?'selected':''}>${esc(mName(i))}${i<0||i>=N?' ＋':''}</option>`).join('');
     html += `
       <div class="f"><label>เดือนเริ่ม</label><select data-k="ms">${opt(s)}</select></div>
       <div class="f"><label>เดือนสิ้นสุด</label><select data-k="me">${opt(e)}</select></div>
@@ -1407,8 +1470,11 @@ function openPop(el){
         <select data-k="style"><option value="solid" ${isHatched(el)?'':'selected'}>ทึบ</option><option value="hatch" ${isHatched(el)?'selected':''}>ลายทแยง</option></select>
       </div></div>`;
   }else{
-    const p = Math.min(N, Math.max(0, Math.round(left / 100 * N)));
-    const opts = Array.from({length:N+1}, (_,i) => `<option value="${i}" ${i===p?'selected':''}>${i<N ? 'ต้น ' + esc(months[i]) : 'ปลาย ' + esc(months[N-1])}</option>`).join('');
+    const p = Math.min(N+pad, Math.max(-pad, Math.round(left / 100 * N)));
+    const opts = Array.from({length: N + 1 + 2*pad}, (_,k) => k - pad).map(i => {
+      const lbl = i < N + pad ? 'ต้น ' + esc(mName(i)) : 'ปลาย ' + esc(mName(i - 1));
+      return `<option value="${i}" ${i===p?'selected':''}>${lbl}${i<0||i>N?' ＋':''}</option>`;
+    }).join('');
     html += `
       <div class="f"><label>ตำแหน่ง</label><select data-k="mp">${opts}</select></div>
       <div class="f"><label>ปรับละเอียด %</label><input type="number" step="0.01" min="0" max="100" data-k="left" value="${pct(left)}"></div>
@@ -1460,14 +1526,17 @@ function openPop(el){
     }
     if(a === 'del'){
       if(!confirm('ลบรายการนี้?')) return;
-      closePop(); el.remove(); markDirty();
+      const tl = el.closest('.timeline');
+      el.remove(); closePop(); markDirty(); maybeAutofit(tl);
     }
   };
 }
 function closePop(){
+  const tl = state.popTarget && state.popTarget.closest('.timeline');
   if(state.popTarget) state.popTarget.classList.remove('em-tl-selected');
   state.popTarget = null;
   pop.style.display = 'none'; pop.innerHTML = '';
+  if(tl) maybeAutofit(tl);
 }
 document.addEventListener('mousedown', e => {
   if(pop.style.display !== 'block') return;
