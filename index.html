@@ -114,6 +114,11 @@
   .deadline-line{position:absolute;top:-10px;bottom:-10px;width:2.5px;background:#dc2626;}
   .deadline-label{position:absolute;top:-28px;font-size:9px;font-weight:700;color:#dc2626;white-space:nowrap;transform:translateX(-50%);}
 
+  /* ── Label collision layout (added) ── */
+  .row{height:calc(62px + var(--em-lift, 0px));padding-top:var(--em-lift, 0px);}
+  .pay-tag,.marker-label,.deadline-label{z-index:2;}
+  .marker-label,.deadline-label{background:rgba(255,255,255,.92);padding:0 3px;border-radius:3px;}
+
   /* ═════════ EDIT MODE (added) ═════════ */
   .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;padding-left:16px;}
   .sync-status{font-size:11.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;white-space:nowrap;}
@@ -798,7 +803,7 @@ function toast(msg, kind=''){
   clearTimeout(toastT); toastT = setTimeout(() => t.className = 'em-toast', 3200);
 }
 const fmtTime = ts => ts ? new Date(ts).toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' }) : '';
-function markDirty(){ if(!state.editing) return; state.dirty = true; refreshStatus(); }
+function markDirty(){ scheduleLayout(); if(!state.editing) return; state.dirty = true; refreshStatus(); }
 
 /* ---------- snapshot / apply ---------- */
 function cleanHTML(node){
@@ -806,6 +811,9 @@ function cleanHTML(node){
   c.querySelectorAll('[contenteditable]').forEach(e => e.removeAttribute('contenteditable'));
   c.querySelectorAll('[spellcheck]').forEach(e => e.removeAttribute('spellcheck'));
   c.querySelectorAll('.em-block-selected,.em-tl-selected').forEach(e => e.classList.remove('em-block-selected','em-tl-selected'));
+  c.querySelectorAll('.row').forEach(r => r.style.removeProperty('--em-lift'));
+  c.querySelectorAll('.marker-label, .deadline-label, .pay-tag').forEach(l => l.style.marginTop = '');
+  c.querySelectorAll('[style=""]').forEach(e => e.removeAttribute('style'));
   c.querySelectorAll('[class=""]').forEach(e => e.removeAttribute('class'));
   return c.innerHTML;
 }
@@ -835,8 +843,54 @@ function applyData(d){
     if(Array.isArray(d.nav.tabs)) $$('.tab-btn').forEach((b,i) => { if(typeof d.nav.tabs[i] === 'string') b.innerHTML = sanitize(d.nav.tabs[i]); });
   }
   markEditable(state.editing);
+  scheduleLayout();
 }
 const DEFAULT_SNAP = snapshot();
+
+/* ---------- label collision layout ---------- */
+const LABEL_SEL = '.marker-label, .deadline-label, .pay-tag';
+const LIFT = 12;          // px per stacking level
+const MAX_LVL = 6;
+function layoutTrack(track){
+  const labels = [...track.children].filter(x => x.matches(LABEL_SEL) && x.style.display !== 'none');
+  labels.forEach(l => l.style.marginTop = '');
+  const items = labels.map(l => ({ l, r: l.getBoundingClientRect() }))
+                      .filter(o => o.r.width > 0)
+                      .sort((a, b) => a.r.left - b.r.left);
+  const hit = (a, b) => a.left < b.right + 4 && b.left < a.right + 4 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  const placed = [];
+  let maxLvl = 0;
+  items.forEach(o => {
+    let lvl = 0, rr;
+    for(; lvl <= MAX_LVL; lvl++){
+      rr = { left:o.r.left, right:o.r.right, top:o.r.top - lvl*LIFT, bottom:o.r.bottom - lvl*LIFT };
+      if(!placed.some(p => hit(rr, p))) break;
+    }
+    lvl = Math.min(lvl, MAX_LVL);
+    placed.push(rr);
+    if(lvl) o.l.style.marginTop = (-lvl * LIFT) + 'px';
+    maxLvl = Math.max(maxLvl, lvl);
+  });
+  return maxLvl;
+}
+function layoutPage(page){
+  if(!page) return;
+  $$('.row', page).forEach(row => {
+    let m = 0;
+    $$('.bar-track', row).forEach(t => { m = Math.max(m, layoutTrack(t)); });
+    if(m) row.style.setProperty('--em-lift', (m * LIFT) + 'px');
+    else row.style.removeProperty('--em-lift');
+  });
+}
+let layoutRaf = 0;
+function scheduleLayout(){
+  cancelAnimationFrame(layoutRaf);
+  layoutRaf = requestAnimationFrame(() => layoutPage($('.page.active')));
+}
+window.addEventListener('resize', scheduleLayout);
+$$('.tab-btn').forEach(b => b.addEventListener('click', () => setTimeout(scheduleLayout, 0)));
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleLayout);
+scheduleLayout();
 
 /* ---------- backend ---------- */
 const isConfigured = !Object.values(FIREBASE_CONFIG).some(v => String(v).includes('YOUR_'));
