@@ -141,6 +141,12 @@
   body.editing .marker::before,body.editing .deadline-line::before{content:"";position:absolute;left:-5px;right:-5px;top:0;bottom:0;}
   body.editing .legend .dot{cursor:pointer;box-shadow:0 0 0 2px transparent;transition:box-shadow .15s;}
   body.editing .legend .dot:hover{box-shadow:0 0 0 2px #fff,0 0 0 4px #2563eb;}
+  body.editing [contenteditable="true"]:empty::before{content:"พิมพ์ข้อความ…";color:#9ca3af;font-style:italic;}
+  .em-menu{position:fixed;z-index:220;background:#1a1d23;border:1px solid #3a3f49;border-radius:10px;padding:6px;display:none;box-shadow:0 10px 30px rgba(0,0,0,.35);min-width:190px;}
+  .em-menu.show{display:block;}
+  .em-menu button{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;color:#e5e7eb;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left;font-family:inherit;}
+  .em-menu button:hover,.em-menu button:focus-visible{background:#2a2e36;outline:none;}
+  .em-menu i{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid;}
   .em-block-selected{box-shadow:0 0 0 2px #f59e0b !important;border-radius:6px;}
   .em-tl-selected{box-shadow:0 0 0 2px #1a1d23,0 0 0 4px #fbbf24 !important;}
 
@@ -671,6 +677,7 @@
   <button type="button" id="emDel" class="danger" disabled title="ลบรายการที่เลือก">✕ ลบ</button>
   <button type="button" id="emAddBar" disabled title="เพิ่มแถบใหม่ในแถว Timeline ที่เลือก">＋ แถบ</button>
   <button type="button" id="emAddMs" disabled title="เพิ่มเส้น Milestone + ป้าย ในแถว Timeline ที่เลือก">◆ ＋ Milestone</button>
+  <button type="button" id="emAddText" title="เพิ่มกล่องข้อความต่อจากตำแหน่งที่คลิกอยู่">＋ กล่องข้อความ</button>
   <button type="button" id="emColor" disabled title="เปลี่ยนสีตัวอักษร — ลากเลือกข้อความ หรือคลิกในช่องเพื่อเปลี่ยนทั้งช่อง">🎨 สีตัวอักษร</button>
   <button type="button" id="emRangeBtn" title="ปรับช่วงเดือนของ Timeline ในหน้านี้">📅 ช่วง Timeline</button>
   <div class="sep"></div>
@@ -727,6 +734,13 @@
   </div>
 </div>
 
+<div class="em-menu" id="emTextMenu" role="menu" aria-label="ชนิดกล่องข้อความ">
+  <button type="button" data-t="line"><i style="background:#fff;border-color:#e3e5e9"></i>ข้อความธรรมดา</button>
+  <button type="button" data-t="note"><i style="background:#fffaf0;border-color:#f6e1b3"></i>Note (เหลือง)</button>
+  <button type="button" data-t="note-red"><i style="background:#fff0f0;border-color:#f3c5c5"></i>Note (แดง)</button>
+  <button type="button" data-t="note-blue"><i style="background:#f0f7ff;border-color:#bdd9f7"></i>Note (ฟ้า)</button>
+</div>
+
 <div class="em-toast" id="emToast"></div>
 
 <script>
@@ -773,7 +787,9 @@ const EDITABLE = [
 ].map(s => '.page .wrap ' + s).join(',') + ', .topbar .logo';
 
 const MULTILINE = 'td, .note, .note-red, .note-blue, .row-label, .card > div[style], .panel > div[style], .subtitle, .subtitle-bold, .subtitle-small';
-const BLOCK_SEL = 'tbody > tr, .row, .card, .residue-card, .note, .note-red, .note-blue, .legend > span';
+const TEXTLINE_SEL = '.panel > div[style]:not(.timeline):not(.legend):not(.residue-grid):not(.cards)';
+const TEXTBOX_SEL = '.note, .note-red, .note-blue, ' + TEXTLINE_SEL + ', .subtitle, .subtitle-bold, .subtitle-small';
+const BLOCK_SEL = 'tbody > tr, .row, .card, .residue-card, .legend > span, ' + TEXTBOX_SEL;
 const TL_SEL    = '.bar, .pay-tag, .marker, .marker-label, .deadline-line, .deadline-label';
 const POINT_SEL = '.pay-tag, .marker, .marker-label, .deadline-line, .deadline-label';
 const LINE_SEL  = '.marker, .deadline-line';
@@ -942,6 +958,7 @@ async function initBackend(){
 
 async function save(){
   closePop();
+  if(!state.force) askRemoveEmpty();
   const snap = snapshot();
   const now = Date.now();
   if(state.fb){
@@ -1087,7 +1104,7 @@ $$('.tab-btn').forEach(b => b.addEventListener('dblclick', () => {
 }));
 
 /* ---------- block selection (dock actions) ---------- */
-const BLOCK_NAMES = [['tr','แถวตาราง'],['.row','แถว Timeline'],['.card','การ์ด'],['.residue-card','การ์ด Residue'],['.note, .note-red, .note-blue','Note'],['.legend > span','Legend']];
+const BLOCK_NAMES = [['tr','แถวตาราง'],['.row','แถว Timeline'],['.card','การ์ด'],['.residue-card','การ์ด Residue'],['.note, .note-red, .note-blue','Note'],['.legend > span','Legend'],['.subtitle, .subtitle-bold, .subtitle-small','คำอธิบายหัวข้อ'],['.panel > div','บรรทัดข้อความ']];
 function selectBlock(b){
   if(state.block) state.block.classList.remove('em-block-selected');
   state.block = b;
@@ -1106,6 +1123,7 @@ document.addEventListener('focusin', e => {
   if(!state.editing) return;
   const w = e.target.closest && e.target.closest('.page .wrap');
   if(!w) return;
+  state.lastEditable = e.target;
   selectBlock(e.target.closest(BLOCK_SEL));
 });
 $('#emDock').addEventListener('mousedown', e => { if(e.target.closest('button')) e.preventDefault(); });
@@ -1173,6 +1191,55 @@ $('#emAddMs').onclick = () => {
   markEditable(true); markDirty(); openPop(label);
   toast('เพิ่ม Milestone แล้ว — เลือกเดือน/สีในหน้าต่าง ⚙ และคลิกป้าย "New milestone" เพื่อแก้ข้อความ', 'ok');
 };
+
+/* ---------- add text box ---------- */
+const textMenu = $('#emTextMenu'), addTextBtn = $('#emAddText');
+function openTextMenu(){
+  const b = addTextBtn.getBoundingClientRect();
+  textMenu.classList.add('show');
+  const w = textMenu.offsetWidth, h = textMenu.offsetHeight;
+  textMenu.style.left = Math.min(Math.max(8, b.left + b.width/2 - w/2), innerWidth - w - 8) + 'px';
+  textMenu.style.top  = (b.top - h - 10) + 'px';
+}
+const closeTextMenu = () => textMenu.classList.remove('show');
+addTextBtn.onclick = () => textMenu.classList.contains('show') ? closeTextMenu() : openTextMenu();
+textMenu.addEventListener('mousedown', e => { if(e.target.closest('button')) e.preventDefault(); });
+document.addEventListener('mousedown', e => {
+  if(textMenu.classList.contains('show') && !textMenu.contains(e.target) && e.target !== addTextBtn) closeTextMenu();
+});
+textMenu.addEventListener('click', e => {
+  const t = e.target.closest('button[data-t]'); if(!t) return;
+  closeTextMenu();
+  const from = (state.block && document.contains(state.block)) ? state.block
+             : (state.lastEditable && document.contains(state.lastEditable)) ? state.lastEditable : null;
+  const page = $('.page.active');
+  // anchor = the direct child of a panel (or of .wrap for page header lines) that contains the click point
+  let anchor = from && page.contains(from) ? (from.closest('.panel > *') || from.closest('.wrap > *')) : null;
+  if(anchor && anchor.matches('.wrap > .cards, .wrap > .panel')) anchor = anchor.matches('.panel') ? anchor.lastElementChild : anchor;
+  if(!anchor){ toast('คลิกในส่วนที่ต้องการก่อน แล้วค่อยเพิ่มกล่องข้อความ', 'warn'); return; }
+  const box = document.createElement('div');
+  if(t.dataset.t === 'line'){
+    if(anchor.parentElement.matches('.wrap')){ box.className = 'subtitle-small'; box.style.marginBottom = '8px'; }
+    else box.style.cssText = 'font-size:12.5px;color:#374151;margin-top:10px;line-height:1.5;';
+  }else box.className = t.dataset.t;
+  anchor.after(box);
+  markEditable(true);
+  box.focus();
+  markDirty();
+});
+
+/* remove empty text boxes (asked before saving) */
+function emptyBoxes(){
+  return $$('.page .wrap').flatMap(w => $$(TEXTBOX_SEL, w)).filter(b => !b.textContent.trim() && !b.querySelector('img, .badge, .dot'));
+}
+function askRemoveEmpty(){
+  const list = emptyBoxes();
+  if(!list.length) return;
+  if(confirm(`พบกล่องข้อความว่าง ${list.length} กล่อง\n\nOK = ลบออกก่อนบันทึก\nCancel = เก็บไว้`)){
+    if(list.includes(state.block)) selectBlock(null);
+    list.forEach(b => b.remove());
+  }
+}
 
 /* ---------- text color ---------- */
 const SWATCHES = ['#1a1d23','#6b7280','#ffffff','#2563eb','#1e40af','#0369a1',
