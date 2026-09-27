@@ -146,6 +146,8 @@
   .em-menu.show{display:block;}
   .em-menu button{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;color:#e5e7eb;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left;font-family:inherit;}
   .em-menu button:hover,.em-menu button:focus-visible{background:#2a2e36;outline:none;}
+  .em-menu .sws{display:flex;gap:3px;margin-left:auto;}
+  .em-menu .sws b{width:12px;height:12px;border-radius:3px;display:inline-block;}
   .em-menu i{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid;}
   .em-block-selected{box-shadow:0 0 0 2px #f59e0b !important;border-radius:6px;}
   .em-tl-selected{box-shadow:0 0 0 2px #1a1d23,0 0 0 4px #fbbf24 !important;}
@@ -678,6 +680,7 @@
   <button type="button" id="emAddBar" disabled title="เพิ่มแถบใหม่ในแถว Timeline ที่เลือก">＋ แถบ</button>
   <button type="button" id="emAddMs" disabled title="เพิ่มเส้น Milestone + ป้าย ในแถว Timeline ที่เลือก">◆ ＋ Milestone</button>
   <button type="button" id="emAddText" title="เพิ่มกล่องข้อความต่อจากตำแหน่งที่คลิกอยู่">＋ กล่องข้อความ</button>
+  <button type="button" id="emPalBtn" title="เปลี่ยนชุดสีของทั้งหน้านี้ (จับคู่ตามลำดับ legend)">🖌 ชุดสีหน้านี้</button>
   <button type="button" id="emColor" disabled title="เปลี่ยนสีตัวอักษร — ลากเลือกข้อความ หรือคลิกในช่องเพื่อเปลี่ยนทั้งช่อง">🎨 สีตัวอักษร</button>
   <button type="button" id="emRangeBtn" title="ปรับช่วงเดือนของ Timeline ในหน้านี้">📅 ช่วง Timeline</button>
   <div class="sep"></div>
@@ -740,6 +743,8 @@
   <button type="button" data-t="note-red"><i style="background:#fff0f0;border-color:#f3c5c5"></i>Note (แดง)</button>
   <button type="button" data-t="note-blue"><i style="background:#f0f7ff;border-color:#bdd9f7"></i>Note (ฟ้า)</button>
 </div>
+
+<div class="em-menu" id="emPalMenu" role="menu" aria-label="ชุดสี"></div>
 
 <div class="em-toast" id="emToast"></div>
 
@@ -1240,6 +1245,99 @@ function askRemoveEmpty(){
     list.forEach(b => b.remove());
   }
 }
+
+/* ---------- page color palettes ---------- */
+const PALETTES = [
+  { name:'Ocean — โทนเย็น',  colors:['#1e3a8a','#0d9488','#0284c7','#7c3aed','#f59e0b','#0e7490','#be123c'] },
+  { name:'Earth — โทนอุ่น',  colors:['#7c2d12','#4d7c0f','#ca8a04','#be185d','#ea580c','#6b21a8','#0f766e'] },
+  { name:'Forest — เขียว/ทอง', colors:['#166534','#65a30d','#b45309','#0f766e','#ca8a04','#7c3aed','#be123c'] },
+  { name:'Vivid — ชุดสีเดิม', colors:['#2563eb','#059669','#dc2626','#9333ea','#d97706','#0369a1','#db2777'] }
+];
+function hexToHsl(hex){
+  const n = parseInt(hex.slice(1), 16), r = (n>>16&255)/255, g = (n>>8&255)/255, b = (n&255)/255;
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), l = (mx+mn)/2;
+  let h = 0, s = 0;
+  if(mx !== mn){
+    const d = mx - mn;
+    s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h, s, l };
+}
+function hslToHex({ h, s, l }){
+  h = ((h % 360) + 360) % 360;
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2,'0')).join('');
+}
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+function buildMapper(page, palette){
+  const legend = [];
+  $$('.legend .dot', page).forEach(d => { const c = colorOf(d); if(!legend.includes(c) && hexToHsl(c).s >= .15) legend.push(c); });
+  if(!legend.length) return null;
+  const pairs = legend.map((c, i) => ({ fromHex:c, from:hexToHsl(c), to:hexToHsl(palette[i % palette.length]), toHex:palette[i % palette.length] }));
+  return hex => {
+    if(!hex) return null;
+    hex = hex.toLowerCase();
+    const exact = pairs.find(p => p.fromHex === hex);
+    if(exact) return exact.toHex;
+    const c = hexToHsl(hex);
+    if(c.s < .15) return null;                       // greys / neutrals stay
+    let best = null, bd = 999;
+    pairs.forEach(p => { const d = hueDist(c.h, p.from.h); if(d < bd){ bd = d; best = p; } });
+    if(!best || bd > 30) return null;
+    return hslToHex({
+      h: best.to.h + (c.h - best.from.h),
+      s: clamp(best.to.s * (c.s / (best.from.s || 1)), 0, 1),
+      l: clamp(best.to.l + (c.l - best.from.l), .05, .97)
+    });
+  };
+}
+function applyPalette(page, palette){
+  const map = buildMapper(page, palette);
+  if(!map){ toast('หน้านี้ยังไม่มี legend สี — ใช้ชุดสีไม่ได้', 'warn'); return; }
+  const jobs = [];
+  const push = (el, get, set) => { const nv = map(get()); if(nv) jobs.push(() => set(nv)); };
+  $$('.bar-track .bar', page).forEach(el => push(el, () => baseColor(el), v => paint(el, v, isHatched(el))));
+  $$('.bar-track .marker, .bar-track .deadline-line', page).forEach(el => push(el, () => baseColor(el), v => el.style.background = v));
+  $$('.bar-track .pay-tag, .bar-track .marker-label, .bar-track .deadline-label, .em-color', page).forEach(el => {
+    if(el.style.color) push(el, () => toHex(el.style.color), v => el.style.color = v);
+  });
+  $$('.legend .dot, .badge', page).forEach(el => push(el, () => colorOf(el), v => el.style.background = v));
+  $$('.card', page).forEach(el => { if(el.style.getPropertyValue('--c')) push(el, () => colorOf(el), v => el.style.setProperty('--c', v)); });
+  $$('.project-tag', page).forEach(el => {
+    if(el.style.background || el.style.backgroundColor) push(el, () => toHex(el.style.background || el.style.backgroundColor), v => el.style.background = v);
+    if(el.style.color) push(el, () => toHex(el.style.color), v => el.style.color = v);
+  });
+  jobs.forEach(j => j());          // compute everything first, then paint — avoids double remapping
+  markDirty();
+  toast(`ใช้ชุดสีแล้ว (${jobs.length} รายการ) — ไม่ชอบกด ↶ ย้อนกลับ หรือกดบันทึกเพื่อยืนยัน`, 'ok');
+}
+
+const palMenu = $('#emPalMenu'), palBtn = $('#emPalBtn');
+palMenu.innerHTML = PALETTES.map((p, i) =>
+  `<button type="button" data-p="${i}">${esc(p.name)}<span class="sws">${p.colors.slice(0,6).map(c => `<b style="background:${c}"></b>`).join('')}</span></button>`).join('');
+function openPalMenu(){
+  const b = palBtn.getBoundingClientRect();
+  palMenu.classList.add('show');
+  const w = palMenu.offsetWidth, h = palMenu.offsetHeight;
+  palMenu.style.left = Math.min(Math.max(8, b.left + b.width/2 - w/2), innerWidth - w - 8) + 'px';
+  palMenu.style.top  = (b.top - h - 10) + 'px';
+}
+const closePalMenu = () => palMenu.classList.remove('show');
+palBtn.onclick = () => palMenu.classList.contains('show') ? closePalMenu() : openPalMenu();
+palMenu.addEventListener('mousedown', e => { if(e.target.closest('button')) e.preventDefault(); });
+document.addEventListener('mousedown', e => {
+  if(palMenu.classList.contains('show') && !palMenu.contains(e.target) && e.target !== palBtn) closePalMenu();
+});
+palMenu.addEventListener('click', e => {
+  const b = e.target.closest('button[data-p]'); if(!b) return;
+  closePalMenu(); closePop();
+  applyPalette($('.page.active'), PALETTES[+b.dataset.p].colors);
+});
 
 /* ---------- text color ---------- */
 const SWATCHES = ['#1a1d23','#6b7280','#ffffff','#2563eb','#1e40af','#0369a1',
