@@ -226,8 +226,8 @@
   </button>
   <!-- added: edit mode controls -->
   <div class="topbar-right">
-    <div class="sync-status" id="emStatus"><i></i><span>กำลังโหลด…</span></div>
-    <button class="edit-toggle" id="emToggle" type="button">✏️ โหมดแก้ไข</button>
+    <div class="sync-status" id="emStatus"><i></i><span>Loading…</span></div>
+    <button class="edit-toggle" id="emToggle" type="button">✏️ Edit mode</button>
   </div>
 </div>
 
@@ -670,6 +670,7 @@
   <button type="button" id="emDup" disabled title="ทำซ้ำรายการที่เลือก (แถวตาราง / แถว Timeline / การ์ด / note)">⧉ ทำซ้ำ</button>
   <button type="button" id="emDel" class="danger" disabled title="ลบรายการที่เลือก">✕ ลบ</button>
   <button type="button" id="emAddBar" disabled title="เพิ่มแถบใหม่ในแถว Timeline ที่เลือก">＋ แถบ</button>
+  <button type="button" id="emAddMs" disabled title="เพิ่มเส้น Milestone + ป้าย ในแถว Timeline ที่เลือก">◆ ＋ Milestone</button>
   <button type="button" id="emColor" disabled title="เปลี่ยนสีตัวอักษร — ลากเลือกข้อความ หรือคลิกในช่องเพื่อเปลี่ยนทั้งช่อง">🎨 สีตัวอักษร</button>
   <button type="button" id="emRangeBtn" title="ปรับช่วงเดือนของ Timeline ในหน้านี้">📅 ช่วง Timeline</button>
   <div class="sep"></div>
@@ -688,13 +689,13 @@
 
 <div class="em-modal" id="emModal" role="dialog" aria-modal="true" aria-labelledby="emModalTitle">
   <div class="em-modal-box">
-    <h3 id="emModalTitle">🔒 เข้าสู่โหมดแก้ไข</h3>
-    <p>ใส่รหัสผ่านเพื่อแก้ไขข้อมูลใน dashboard</p>
-    <input type="password" id="emPw" placeholder="รหัสผ่าน" autocomplete="current-password">
+    <h3 id="emModalTitle">🔒 Enter edit mode</h3>
+    <p>Enter the password to edit this dashboard.</p>
+    <input type="password" id="emPw" placeholder="Password" autocomplete="current-password">
     <div class="err" id="emPwErr"></div>
     <div class="acts">
-      <button type="button" id="emPwCancel">ยกเลิก</button>
-      <button type="button" id="emPwOk" class="primary">เข้าสู่โหมดแก้ไข</button>
+      <button type="button" id="emPwCancel">Cancel</button>
+      <button type="button" id="emPwOk" class="primary">Enter edit mode</button>
     </div>
   </div>
 </div>
@@ -793,7 +794,7 @@ function setStatus(kind, text, keepBase){
   if(!keepBase) baseStatus = { kind, text };
 }
 function refreshStatus(){
-  if(state.editing && state.dirty) setStatus('dirty','มีการแก้ไขที่ยังไม่บันทึก', true);
+  if(state.editing && state.dirty) setStatus('dirty','Unsaved changes', true);
   else setStatus(baseStatus.kind, baseStatus.text, true);
 }
 let toastT;
@@ -802,7 +803,7 @@ function toast(msg, kind=''){
   t.textContent = msg; t.className = 'em-toast show ' + kind;
   clearTimeout(toastT); toastT = setTimeout(() => t.className = 'em-toast', 3200);
 }
-const fmtTime = ts => ts ? new Date(ts).toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' }) : '';
+const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-GB', { dateStyle:'medium', timeStyle:'short' }) : '';
 function markDirty(){ scheduleLayout(); if(!state.editing) return; state.dirty = true; refreshStatus(); }
 
 /* ---------- snapshot / apply ---------- */
@@ -903,10 +904,10 @@ function loadLocal(){
 async function initBackend(){
   if(!isConfigured){
     loadLocal();
-    setStatus('local','บันทึกในเครื่องนี้ (ยังไม่ตั้งค่า Firebase)');
+    setStatus('local','Saved locally (Firebase not configured)');
     return;
   }
-  setStatus('sync','กำลังเชื่อมต่อ Firebase…');
+  setStatus('sync','Connecting to Firebase…');
   try{
     const appMod = await import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`);
     const dbMod  = await import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-database.js`);
@@ -916,7 +917,7 @@ async function initBackend(){
     state.fb  = { runTransaction: dbMod.runTransaction, r };
     dbMod.onValue(r, snap => {
       const d = snap.val();
-      if(!d){ state.rev = 0; setStatus('ok','Firebase · ใช้ข้อมูลต้นฉบับ'); refreshStatus(); return; }
+      if(!d){ state.rev = 0; setStatus('ok','Firebase connected · default data'); refreshStatus(); return; }
       if(state.editing){
         if((d.rev || 0) !== state.rev){
           state.remotePending = d;
@@ -926,16 +927,16 @@ async function initBackend(){
       }
       state.rev = d.rev || 0;
       applyData(d);
-      setStatus('ok','ซิงก์แล้ว · ' + fmtTime(d.updatedAt));
+      setStatus('ok','Synced · ' + fmtTime(d.updatedAt));
     }, err => {
       console.error(err);
-      setStatus('err','อ่าน Firebase ไม่ได้ — ตรวจสอบ Rules');
+      setStatus('err','Firebase access denied — check Rules');
     });
   }catch(e){
     console.error(e);
     state.fb = null;
     loadLocal();
-    setStatus('err','โหลด Firebase ไม่สำเร็จ — ใช้ข้อมูลในเครื่อง');
+    setStatus('err','Firebase unavailable — using local data');
   }
 }
 
@@ -977,7 +978,7 @@ async function save(){
   }
   state.force = false; state.dirty = false; state.remotePending = null;
   state.editStartSnap = snapshot();
-  setStatus(state.fb ? 'ok' : 'local', (state.fb ? 'ซิงก์แล้ว · ' : 'บันทึกในเครื่อง · ') + fmtTime(now));
+  setStatus(state.fb ? 'ok' : 'local', (state.fb ? 'Synced · ' : 'Saved locally · ') + fmtTime(now));
   toast('บันทึกแล้ว', 'ok');
   return true;
 }
@@ -999,7 +1000,7 @@ function enterEdit(){
   state.editStartSnap = snapshot();
   document.body.classList.add('editing');
   markEditable(true);
-  const b = $('#emToggle'); b.classList.add('on'); b.textContent = '✏️ กำลังแก้ไข';
+  const b = $('#emToggle'); b.classList.add('on'); b.textContent = '✏️ Editing';
   refreshStatus();
 }
 function leaveEdit(){
@@ -1008,11 +1009,11 @@ function leaveEdit(){
   $('#emPalette').classList.remove('show'); $('#emColor').disabled = true;
   document.body.classList.remove('editing');
   markEditable(false);
-  const b = $('#emToggle'); b.classList.remove('on'); b.textContent = '✏️ โหมดแก้ไข';
+  const b = $('#emToggle'); b.classList.remove('on'); b.textContent = '✏️ Edit mode';
   if(state.remotePending){
     state.rev = state.remotePending.rev || 0;
     applyData(state.remotePending);
-    setStatus('ok','ซิงก์แล้ว · ' + fmtTime(state.remotePending.updatedAt));
+    setStatus('ok','Synced · ' + fmtTime(state.remotePending.updatedAt));
     state.remotePending = null;
   }
   refreshStatus();
@@ -1046,7 +1047,7 @@ function tryUnlock(){
     state.unlocked = true;
     try { sessionStorage.setItem('soilTrialEditUnlocked','1'); } catch(e) {}
     closeModal(); enterEdit();
-  }else{ pwErr.textContent = 'รหัสผ่านไม่ถูกต้อง'; pw.select(); }
+  }else{ pwErr.textContent = 'Incorrect password'; pw.select(); }
 }
 $('#emPwOk').onclick = tryUnlock;
 $('#emPwCancel').onclick = closeModal;
@@ -1099,6 +1100,7 @@ function selectBlock(b){
   $('#emDup').disabled = !b;
   $('#emDel').disabled = !b;
   $('#emAddBar').disabled = !(b && b.matches('.row'));
+  $('#emAddMs').disabled  = !(b && b.matches('.row'));
 }
 document.addEventListener('focusin', e => {
   if(!state.editing) return;
@@ -1149,9 +1151,27 @@ $('#emAddBar').onclick = () => {
   const bar = document.createElement('div');
   bar.className = 'bar';
   bar.style.cssText = `left:0%;width:${(100/N).toFixed(2)}%;background:#6b7280;`;
-  bar.textContent = 'แถบใหม่';
+  bar.textContent = 'New bar';
   track.appendChild(bar);
   markEditable(true); markDirty(); openPop(bar);
+};
+
+$('#emAddMs').onclick = () => {
+  const row = state.block; if(!row || !row.matches('.row')) return;
+  const track = $('.bar-track', row); if(!track) return;
+  const tl = row.closest('.timeline');
+  const N = monthsOf(tl).length, rng = parseRange(tl);
+  const now = new Date(), nowS = now.getFullYear() * 12 + now.getMonth();
+  const idx = (rng && nowS >= rng.start && nowS < rng.start + rng.n) ? nowS - rng.start : 0;
+  const left = pct(idx / N * 100) + '%', color = '#d97706';
+  const line = document.createElement('div');
+  line.className = 'marker'; line.style.cssText = `left:${left};background:${color};`;
+  const label = document.createElement('div');
+  label.className = 'marker-label'; label.style.cssText = `left:${left};color:${color};`;
+  label.textContent = 'New milestone';
+  track.append(line, label);
+  markEditable(true); markDirty(); openPop(label);
+  toast('เพิ่ม Milestone แล้ว — เลือกเดือน/สีในหน้าต่าง ⚙ และคลิกป้าย "New milestone" เพื่อแก้ข้อความ', 'ok');
 };
 
 /* ---------- text color ---------- */
@@ -1623,8 +1643,20 @@ function openPop(el){
       el.after(c); markEditable(true); markDirty(); openPop(c);
     }
     if(a === 'del'){
-      if(!confirm('ลบรายการนี้?')) return;
+      // milestone/deadline: remove the line and its label together (pay-tags stay)
+      const pairSel = el.matches('.marker, .marker-label') ? '.marker, .marker-label'
+                    : el.matches('.deadline-line, .deadline-label') ? '.deadline-line, .deadline-label' : null;
+      const L = parseFloat(el.style.left);
+      const pair = pairSel ? [...el.parentElement.children].filter(x => x !== el && x.matches(pairSel)
+                     && !x.matches(el.matches('.marker, .deadline-line') ? LINE_SEL : '.marker-label, .deadline-label')
+                     && Math.abs(parseFloat(x.style.left) - L) < 0.05) : [];
+      // deleting a label keeps the line if another label still sits on it
+      if(el.matches('.marker-label, .deadline-label') && [...el.parentElement.children].some(x => x !== el
+           && x.matches('.marker-label, .deadline-label') && Math.abs(parseFloat(x.style.left) - L) < 0.05)) pair.length = 0;
+      const what = pair.length ? 'ลบ Milestone นี้ (ทั้งเส้นและป้าย)?' : 'ลบรายการนี้?';
+      if(!confirm(what)) return;
       const tl = el.closest('.timeline');
+      pair.forEach(x => x.remove());
       el.remove(); closePop(); markDirty(); maybeAutofit(tl);
     }
   };
